@@ -1,0 +1,132 @@
+##################################################################################
+#                                                                                #
+# Copyright (c) 2020 AECgeeks                                                    #
+#                                                                                #
+# Permission is hereby granted, free of charge, to any person obtaining a copy   #
+# of this software and associated documentation files (the "Software"), to deal  #
+# in the Software without restriction, including without limitation the rights   #
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell      #
+# copies of the Software, and to permit persons to whom the Software is          #
+# furnished to do so, subject to the following conditions:                       #
+#                                                                                #
+# The above copyright notice and this permission notice shall be included in all #
+# copies or substantial portions of the Software.                                #
+#                                                                                #
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR     #
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,       #
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE    #
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER         #
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,  #
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE  #
+# SOFTWARE.                                                                      #
+#                                                                                #
+##################################################################################
+
+import os
+import sys
+import json
+import platform
+import traceback
+import subprocess
+import tempfile
+import operator
+
+
+on_windows = platform.system() == 'Windows'
+ext = ".exe" if on_windows else ""
+exe_path = os.path.join(os.path.dirname(__file__), "win" if on_windows else "nix")
+IFCCONVERT = os.path.join(exe_path, "IfcConvert") + ext
+if not os.path.exists(IFCCONVERT):
+    IFCCONVERT = "IfcConvert"
+
+
+import utils
+import database
+
+
+def set_progress(id, progress):
+    session = database.Session()
+    model = session.query(database.model).filter(database.model.code == id).all()[0]
+    model.progress = int(progress)
+    session.commit()
+    session.close()
+
+
+class task(object):
+    def __init__(self, progress_map):
+        print(self.__class__.__name__, progress_map)
+        self.begin, self.end = progress_map
+
+    def sub_progress(self, i):
+        set_progress(self.id, self.begin + (self.end - self.begin) * i / 100.)
+
+    def __call__(self, directory, id):
+        self.id = id
+        self.execute(directory, id)
+        self.sub_progress(100)
+
+
+class xml_generation_task(task):
+    est_time = 1
+
+    def execute(self, directory, id):
+        subprocess.call([IFCCONVERT, id + ".ifc", id + ".xml", "-yv"], cwd=directory)
+
+
+class geometry_generation_task(task):
+    est_time = 10
+
+    def execute(self, directory, id):
+        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".glb", "-qy"], cwd=directory, stdout=subprocess.PIPE)
+        i = 0
+        while True:
+            ch = proc.stdout.read(1)
+
+            if not ch and proc.poll() is not None:
+                break
+
+            if ch and ord(ch) == ord('.'):
+                i += 1
+                self.sub_progress(i)
+
+
+class svg_generation_task(task):
+    est_time = 10
+
+    def execute(self, directory, id):
+        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor"], cwd=directory, stdout=subprocess.PIPE)
+        i = 0
+        while True:
+            ch = proc.stdout.read(1)
+
+            if not ch and proc.poll() is not None:
+                break
+
+            if ch and ord(ch) == ord('.'):
+                i += 1
+                self.sub_progress(i)
+
+
+
+def process(id):
+    d = utils.storage_dir_for_id(id)
+
+    tasks = [
+        xml_generation_task,
+        geometry_generation_task,
+        svg_generation_task
+    ]
+
+    elapsed = 0
+    set_progress(id, elapsed)
+    
+    total_est_time = sum(map(operator.attrgetter('est_time'), tasks))
+    
+    for t in tasks:
+        begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
+        task = t(begin_end)
+        task(d, id)
+        elapsed += t.est_time
+        
+    elapsed = 100
+    set_progress(id, elapsed)

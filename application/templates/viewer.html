@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>IfcOpenShell viewer</title>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:300,600' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="/static/main.css"/>
+
+    <script type="text/javascript" src="/static/bimsurfer/lib/es6-promise-3.2.2.min.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/arraybuffer-slice.js"></script>
+    <script type="text/javascript">ES6Promise.polyfill()</script>
+    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/three.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/OrbitControls.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/GLTFLoader.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
+    
+    <script>
+        var require = {
+            waitSeconds : 30,
+            paths: {bimsurfer: "/static/bimsurfer"}
+        }
+    </script>
+    
+    <script type="text/javascript" src="/static/bimsurfer/lib/require.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>    
+    <script type="text/javascript">
+        require([
+            "bimsurfer/src/MultiModal",
+            "bimsurfer/lib/domReady!",
+        ],
+        function (Viewer) {
+            var v = new Viewer({
+                domNode: 'right',
+                svgDomNode: 'bottom',
+                modelId: "{{ id }}",
+                withTreeVisibilityToggle: true
+            });
+            v.load2d();
+            v.load3d();
+            v.loadMetadata('middle');
+            v.loadTreeView('top');
+        });
+    </script>
+
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #left, #right {
+            top: 0;
+            bottom: 0;            
+            position: absolute;
+        }
+        #left {
+            left: 0;
+            right: 75%;
+            border-right: solid 1px gray;
+        }
+        #right {
+            left: 25%;
+            right: 0;
+        }
+        #left > div {
+            height: 33%;
+            border-bottom: solid 1px gray;
+        } 
+    </style>
+</head>
+<body>
+
+<div id='left'>
+<div id='top' class='bimsurfer-static-tree'></div>
+<div id='middle' class='bimsurfer-metadata'></div>
+<div id='bottom'></div>
+</div>
+<div id='right'>
+</div>
+
+</body>
+</html>

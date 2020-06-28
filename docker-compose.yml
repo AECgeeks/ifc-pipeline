@@ -1,0 +1,72 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:12.1-alpine
+    expose:
+      - "5432"
+    volumes:
+      - ./docker-volumes/db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+
+  redis:
+    image: redis:5.0.7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - ./docker-volumes/redis:/data
+
+  frontend:
+    build:
+      context: '.'
+      dockerfile: application/Dockerfile
+    entrypoint: sh -c 'python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi'
+    environment:
+      - MODEL_DIR=/data
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=db
+    expose:
+      - "5000"
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - ./models:/data
+      
+  nginx:
+    image: nginx:1.17-alpine
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      - ./docker-volumes/certbot/conf:/etc/letsencrypt
+      - ./docker-volumes/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c \"nginx -g 'daemon off;' & while true; do nginx -t && nginx -s reload; sleep 1h; done\""
+    
+  
+  certbot:
+    ports: []
+    image: certbot/certbot
+    volumes:
+      - ./docker-volumes/certbot/conf:/etc/letsencrypt
+      - ./docker-volumes/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit INT TERM; while true; do certbot renew --webroot -w /var/www/certbot; sleep 12h; done'"
+
+  worker:
+    build:
+      context: '.'
+      dockerfile: application/Dockerfile
+    entrypoint: rq worker --url redis://redis:6379
+    environment:
+      - MODEL_DIR=/data
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=db
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - ./models:/data
