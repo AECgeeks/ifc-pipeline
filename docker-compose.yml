@@ -40,7 +40,6 @@ services:
       - frontend
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
@@ -60,7 +59,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    entrypoint: entrypoint: supervisord -n
+    entrypoint: supervisord -n
     environment:
       - MODEL_DIR=/data
       - REDIS_HOST=redis
