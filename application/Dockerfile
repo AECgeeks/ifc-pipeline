@@ -1,7 +1,7 @@
 FROM debian:buster-slim
 
 WORKDIR /
-RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel
+RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel supervisor
 RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis sqlalchemy psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests
 RUN npm install -g jsdoc
 
@@ -24,5 +24,7 @@ RUN rm -rf /tmp/.git
 COPY application/static /www/static/
 COPY application/bimsurfer/bimsurfer /www/static/bimsurfer
 # RUN jsdoc -r -d /www/static/docs /www/static/bimsurfer
+
+COPY application/queue.conf /etc/supervisord.conf
 
 WORKDIR /www

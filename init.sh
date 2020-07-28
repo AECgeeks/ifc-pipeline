@@ -11,7 +11,7 @@ else
 fi
 
 sudo docker run -it --rm \
--v /data/docker-volumes/certbot/conf:/etc/letsencrypt \
+-v $PWD/docker-volumes/certbot/conf:/etc/letsencrypt \
 -p 80:80 \
 certbot/certbot \
 certonly --standalone \

@@ -60,11 +60,12 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    entrypoint: rq worker --url redis://redis:6379
+    entrypoint: entrypoint: supervisord -n
     environment:
       - MODEL_DIR=/data
       - REDIS_HOST=redis
       - POSTGRES_HOST=db
+      - NUM_WORKERS=2
     depends_on:
       - redis
       - db
