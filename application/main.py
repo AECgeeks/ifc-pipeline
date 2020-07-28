@@ -42,13 +42,13 @@ application = Flask(__name__)
 
 CORS(application)
 application.config['SWAGGER'] = {
-    'title': 'ifc-pipeline request API',
+    'title': os.environ.get('APP_NAME', 'ifc-pipeline request API'),
     'openapi': '3.0.2',
     "specs": [
         {
             "version": "0.1",
-            "title": "ifc-pipeline request API v0.1",
-            "description": "ifc-pipeline request API v0.1",
+            "title": os.environ.get('APP_NAME', 'ifc-pipeline request API'),
+            "description": os.environ.get('APP_NAME', 'ifc-pipeline request API'),
             "endpoint": "spec",
             "route": "/apispec",
         },
