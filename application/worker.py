@@ -25,8 +25,10 @@
 import os
 import sys
 import json
+import glob
 import platform
 import traceback
+import importlib
 import subprocess
 import tempfile
 import operator
@@ -116,6 +118,27 @@ def process(id):
         geometry_generation_task,
         svg_generation_task
     ]
+    
+    """
+    # Create a file called task_print.py with the following
+    # example content to add application-specific tasks
+
+    import sys
+    
+    from worker import task as base_task
+    
+    class task(base_task):
+        est_time = 1    
+        
+        def execute(self, directory, id):
+            print("Executing task 'print' on ", id, ' in ', directory, file=sys.stderr)
+    """
+    
+    for fn in glob.glob("task_*.py"):
+        mdl = importlib.import_module(fn.split('.')[0])
+        tasks.append(mdl.task)
+        
+    tasks.sort(key=lambda t: getattr(t, 'order', 10))
 
     elapsed = 0
     set_progress(id, elapsed)

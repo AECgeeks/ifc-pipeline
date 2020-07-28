@@ -172,3 +172,17 @@ def get_model(fn):
         
     return send_file(path)
 
+"""
+# Create a file called routes.py with the following
+# example content to add application-specific routes
+
+from main import application
+
+@application.route('/test', methods=['GET'])
+def test_hello_world():
+    return 'Hello world'
+"""
+try:
+    import routes
+except ImportError as e:
+    pass
