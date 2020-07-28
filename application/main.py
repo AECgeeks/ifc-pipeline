@@ -70,7 +70,7 @@ def get_main():
     return render_template('index.html')
 
 
-def process_upload(filewriter):
+def process_upload(filewriter, callback_url=None):
     id = utils.generate_id()
     d = utils.storage_dir_for_id(id)
     os.makedirs(d)
@@ -83,10 +83,10 @@ def process_upload(filewriter):
     session.close()
     
     if DEVELOPMENT:
-        t = threading.Thread(target=lambda: worker.process(id))
+        t = threading.Thread(target=lambda: worker.process(id, callback_url))
         t.start()
     else:
-        q.enqueue(worker.process, id)
+        q.enqueue(worker.process, id, callback_url)
 
     return id
     

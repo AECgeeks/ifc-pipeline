@@ -33,6 +33,7 @@ import subprocess
 import tempfile
 import operator
 
+import requests
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
@@ -110,7 +111,7 @@ class svg_generation_task(task):
 
 
 
-def process(id):
+def do_process(id):
     d = utils.storage_dir_for_id(id)
 
     tasks = [
@@ -153,3 +154,15 @@ def process(id):
         
     elapsed = 100
     set_progress(id, elapsed)
+    
+def process(id, callback_url):
+    try:
+        do_process(id)
+        status = "success"
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        status = "failure"        
+        
+    if callback_url is not None:
+        r = requests.post(callback_url, data={"status": status, "id": id})
