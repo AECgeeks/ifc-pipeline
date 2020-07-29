@@ -29,6 +29,7 @@ import threading
 
 from collections import defaultdict
 
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for
 from flask_cors import CORS
 from flask_basicauth import BasicAuth
@@ -39,6 +40,12 @@ import worker
 import database
 
 application = Flask(__name__)
+
+DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
+
+if not DEVELOPMENT:
+    # In some setups this proved to be necessary for url_for() to pick up HTTPS
+    application.wsgi_app = ProxyFix(application.wsgi_app, x_proto=1)
 
 CORS(application)
 application.config['SWAGGER'] = {
@@ -55,8 +62,6 @@ application.config['SWAGGER'] = {
     ]
 }
 swagger = Swagger(application)
-
-DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
 if not DEVELOPMENT:
     from redis import Redis
