@@ -6,7 +6,7 @@ html, body, canvas {
     height: 100%;
 }
 
-form {
+form.upload {
     padding: 32px;
 }
 
@@ -24,7 +24,7 @@ textarea {
     padding: 10px;
 }
 
-h1 {
+h1.logo {
     margin: 0;
     font-weight: normal;
 }
