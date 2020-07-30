@@ -6,10 +6,6 @@ html, body, canvas {
     height: 100%;
 }
 
-* {
-    font-size: 10pt;
-}
-
 form {
     padding: 32px;
 }
@@ -138,3 +134,10 @@ div.bimsurfer-tree-eye-off {
 .bimsurfer-metadata th:nth-child(2) {
     width: 70%;
 }
+
+.bimsurfer-metadata,
+.bimsurfer-metadata h3,
+.bimsurfer-static-tree {
+    font-size: 10pt;
+}
+
