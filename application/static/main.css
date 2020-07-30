@@ -10,16 +10,6 @@ form.upload {
     padding: 32px;
 }
 
-label {
-    margin-top: 32px;
-    display: block;
-}
-
-textarea {
-    width: 100%;
-    min-height: 256px;
-}
-
 .container {
     padding: 10px;
 }
