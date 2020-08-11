@@ -97,7 +97,7 @@ class glb_optimize_task(task):
     est_time = 1
     
     def execute(self, directory, id):
-        if subprocess.call(["gltf-pipeline.cmd", "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
+        if subprocess.call(["gltf-pipeline" + ('.cmd' if on_windows else ''), "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
             os.rename(os.path.join(directory, id + ".glb"), os.path.join(directory, id + ".unoptimized.glb"))
             os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
 
