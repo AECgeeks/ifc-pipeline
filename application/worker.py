@@ -92,6 +92,15 @@ class geometry_generation_task(task):
                 i += 1
                 self.sub_progress(i)
 
+                
+class glb_optimize_task(task):
+    est_time = 1
+    
+    def execute(self, directory, id):
+        if subprocess.call(["gltf-pipeline.cmd", "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
+            os.rename(os.path.join(directory, id + ".glb"), os.path.join(directory, id + ".unoptimized.glb"))
+            os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
+
 
 class gzip_task(task):
     est_time = 1
@@ -131,6 +140,7 @@ def do_process(id):
         xml_generation_task,
         geometry_generation_task,
         svg_generation_task,
+        glb_optimize_task,
         gzip_task
     ]
     
