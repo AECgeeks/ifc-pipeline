@@ -133,6 +133,7 @@ def get_progress(id):
         abort(404)
     session = database.Session()
     model = session.query(database.model).filter(database.model.code == id).all()[0]
+    session.close()
     return jsonify({"progress": model.progress})
 
 
