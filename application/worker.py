@@ -93,6 +93,19 @@ class geometry_generation_task(task):
                 self.sub_progress(i)
 
 
+class gzip_task(task):
+    est_time = 1
+    
+    def execute(self, directory, id):
+        import gzip
+        for ext in ["glb", "xml", "svg"]:
+            fn = os.path.join(directory, id + "." + ext)
+            if os.path.exists(fn):
+                with open(fn, 'rb') as orig_file:
+                    with gzip.open(fn + ".gz", 'wb') as zipped_file:
+                        zipped_file.writelines(orig_file)
+
+
 class svg_generation_task(task):
     est_time = 10
 
@@ -117,7 +130,8 @@ def do_process(id):
     tasks = [
         xml_generation_task,
         geometry_generation_task,
-        svg_generation_task
+        svg_generation_task,
+        gzip_task
     ]
     
     """

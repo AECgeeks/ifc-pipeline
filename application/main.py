@@ -30,7 +30,7 @@ import threading
 from collections import defaultdict
 
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for
+from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response
 from flask_cors import CORS
 from flask_basicauth import BasicAuth
 from flasgger import Swagger
@@ -176,7 +176,16 @@ def get_model(fn):
     if not os.path.exists(path):
         abort(404)
         
-    return send_file(path)
+    if os.path.exists(path + ".gz"):
+        import mimetypes
+        response = make_response(
+            send_file(path + ".gz", 
+                mimetype=mimetypes.guess_type(fn, strict=False)[0])
+        )
+        response.headers['Content-Encoding'] = 'gzip'
+        return response
+    else:
+        return send_file(path)
 
 """
 # Create a file called routes.py with the following
