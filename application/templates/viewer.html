@@ -6,16 +6,25 @@
     <link href='https://fonts.googleapis.com/css?family=Open+Sans:300,600' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="/static/main.css"/>
 
+    <!--
     <script type="text/javascript" src="/static/bimsurfer/lib/es6-promise-3.2.2.min.js"></script>
     <script type="text/javascript" src="/static/bimsurfer/lib/arraybuffer-slice.js"></script>
     <script type="text/javascript">ES6Promise.polyfill()</script>
-    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/three.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/OrbitControls.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/GLTFLoader.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/DRACOLoader.js"></script>
+    -->
+    
+    
+    {% if postfix %}
+    <script type="text/javascript" src="/static/bimsurfer/lib/three.gltf.orbit.draco.min.js"></script>
+    {% else %}
+    <script type="text/javascript" src="/static/bimsurfer/lib/three.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/OrbitControls.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/GLTFLoader.js"></script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/DRACOLoader.js"></script>
+    {% endif %}
     <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
-    <script type="text/javascript">window.MODEL_ID = "{{ id }}";</script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App.js"></script>
+    
+    <script type="text/javascript">window.MODEL_ID = "{{ id }}"; window.SPINNER_CLASS = 'spinner'</script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App{{postfix}}.js"></script>
     <style>
         html, body {
             margin: 0;

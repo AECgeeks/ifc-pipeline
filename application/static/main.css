@@ -131,3 +131,21 @@ div.bimsurfer-tree-eye-off {
     font-size: 10pt;
 }
 
+.spinner {
+  position: fixed;
+  top: calc(50% - 64px);
+  left: calc(50% - 64px);
+  width: 128px;
+  height: 128px;
+  border: solid 4px gray;
+  border-bottom-color: white;
+  border-radius: 50%;
+  animation: spin 2s linear infinite;
+  z-index: 9999;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

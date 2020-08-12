@@ -43,6 +43,13 @@ application = Flask(__name__)
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
+
+if not DEVELOPMENT and os.path.exists("/version"):
+    PIPELINE_POSTFIX = "." + open("/version").read().strip()
+else:
+    PIPELINE_POSTFIX = ""
+
+
 if not DEVELOPMENT:
     # In some setups this proved to be necessary for url_for() to pick up HTTPS
     application.wsgi_app = ProxyFix(application.wsgi_app, x_proto=1)
@@ -146,7 +153,7 @@ def get_viewer(id):
     if not os.path.exists(glbfn):
         abort(404)
         
-    return render_template('viewer.html', **locals())
+    return render_template('viewer.html', id=id, postfix=PIPELINE_POSTFIX)
 
 
 @application.route('/m/<fn>', methods=['GET'])
