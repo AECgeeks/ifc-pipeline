@@ -14,36 +14,8 @@
     <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/GLTFLoader.js"></script>
     <script type="text/javascript" src="/static/bimsurfer/src/threeViewer/DRACOLoader.js"></script>
     <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
-    
-    <script>
-        var require = {
-            waitSeconds : 30,
-            paths: {bimsurfer: "/static/bimsurfer"}
-        }
-    </script>
-    
-    <script type="text/javascript" src="/static/bimsurfer/lib/require.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>    
-    <script type="text/javascript">
-        require([
-            "bimsurfer/src/MultiModal",
-            "bimsurfer/lib/domReady!",
-        ],
-        function (Viewer) {
-            var v = new Viewer({
-                domNode: 'right',
-                svgDomNode: 'bottom',
-                modelId: "{{ id }}",
-                withTreeVisibilityToggle: true
-            });
-            v.load2d();
-            v.load3d();
-            v.loadMetadata('middle');
-            v.loadTreeView('top');
-        });
-    </script>
-
-
+    <script type="text/javascript">window.MODEL_ID = "{{ id }}";</script>
+    <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App.js"></script>
     <style>
         html, body {
             margin: 0;
