@@ -92,6 +92,10 @@ class geometry_generation_task(task):
                 i += 1
                 self.sub_progress(i)
 
+        # GLB generation is mandatory to succeed
+        if proc.poll() != 0:
+            raise RuntimeError()
+
                 
 class glb_optimize_task(task):
     est_time = 1
@@ -173,7 +177,13 @@ def do_process(id):
     for t in tasks:
         begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
         task = t(begin_end)
-        task(d, id)
+        try:
+            task(d, id)
+        except:
+            # Mark ID as failed
+            with open(os.path.join(d, 'failed'), 'w') as f:
+                pass
+            break
         elapsed += t.est_time
         
     elapsed = 100

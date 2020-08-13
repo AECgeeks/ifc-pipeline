@@ -149,6 +149,10 @@ def get_viewer(id):
     if not utils.validate_id(id):
         abort(404)
 
+    failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
+    if os.path.exists(failedfn):
+        return render_template('error.html', id=id)
+
     glbfn = os.path.join(utils.storage_dir_for_id(id), id + ".glb")
     if not os.path.exists(glbfn):
         abort(404)
