@@ -179,7 +179,7 @@ def do_process(id):
         task = t(begin_end)
         try:
             task(d, id)
-        except:
+        except RuntimeError as e:
             # Mark ID as failed
             with open(os.path.join(d, 'failed'), 'w') as f:
                 pass

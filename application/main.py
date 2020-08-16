@@ -74,7 +74,7 @@ if not DEVELOPMENT:
     from redis import Redis
     from rq import Queue
 
-    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")))
+    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")), default_timeout=3600)
 
 
 @application.route('/', methods=['GET'])
