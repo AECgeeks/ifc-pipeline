@@ -49,8 +49,12 @@ import database
 
 def set_progress(id, progress):
     session = database.Session()
+    id = id[:-2]
+    model2 = session.query(database.model).filter(database.model.code == id).all()
+    
+
     model = session.query(database.model).filter(database.model.code == id).all()[0]
-    model.progress = int(progress)
+    # model.progress = int(progress)
     session.commit()
     session.close()
 
@@ -66,7 +70,7 @@ class task(object):
     def __call__(self, directory, id):
         self.id = id
         self.execute(directory, id)
-        self.sub_progress(100)
+        # self.sub_progress(100)
 
 
 class xml_generation_task(task):
@@ -107,7 +111,7 @@ class svg_generation_task(task):
 
             if ch and ord(ch) == ord('.'):
                 i += 1
-                self.sub_progress(i)
+                # self.sub_progress(i)
 
 
 
@@ -154,10 +158,74 @@ def do_process(id):
         
     elapsed = 100
     set_progress(id, elapsed)
+
     
 def process(id, callback_url):
     try:
         do_process(id)
+        status = "success"
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        status = "failure"        
+        
+    if callback_url is not None:
+        r = requests.post(callback_url, data={"status": status, "id": id})
+
+
+
+def do_process_multiple(id):
+    d = utils.storage_dir_for_id(id)
+
+    tasks = [
+        xml_generation_task,
+        geometry_generation_task,
+        svg_generation_task
+    ]
+    
+    """
+    # Create a file called task_print.py with the following
+    # example content to add application-specific tasks
+
+    import sys
+    
+    from worker import task as base_task
+    
+    class task(base_task):
+        est_time = 1    
+        
+        def execute(self, directory, id):
+            print("Executing task 'print' on ", id, ' in ', directory, file=sys.stderr)
+    """
+    
+    for fn in glob.glob("task_*.py"):
+        mdl = importlib.import_module(fn.split('.')[0])
+        tasks.append(mdl.task)
+        
+    tasks.sort(key=lambda t: getattr(t, 'order', 10))
+
+    elapsed = 0
+    # set_progress(id, elapsed)
+    
+    total_est_time = sum(map(operator.attrgetter('est_time'), tasks))
+    
+    
+    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
+    for i in range(n_files):
+        for t in tasks:
+            begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
+            task = t(begin_end)
+            task(d, id + "_" + str(i))
+            elapsed += t.est_time
+        
+    elapsed = 100
+    # set_progress(id, elapsed)
+
+
+
+def process_multiple(id, callback_url):
+    try:
+        do_process_multiple(id)
         status = "success"
     except Exception as e:
         import traceback

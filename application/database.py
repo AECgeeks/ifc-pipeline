@@ -27,8 +27,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
 from sqlalchemy.inspection import inspect
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy_utils import database_exists, create_database
+from sqlalchemy.orm import relationship
 import os
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
@@ -54,12 +55,35 @@ class model(Base, Serializable):
     id = Column(Integer, primary_key=True)
     code = Column(String)
     filename = Column(String)
+    files = relationship("file")
+    
     progress = Column(Integer, default=-1)
     date = Column(DateTime, server_default=func.now())
 
     def __init__(self, code, filename):
         self.code = code
         self.filename = filename
+
+
+
+
+class file(Base, Serializable):
+    __tablename__ = 'files'
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String)
+    filename = Column(String)
+ 
+    model_id = Column(Integer, ForeignKey('models.id'))
+
+    progress = Column(Integer, default=-1)
+    date = Column(DateTime, server_default=func.now())
+
+    def __init__(self, code, filename):
+        self.code = code
+        self.filename = filename
+        
+        self.model_id = Column(Integer, ForeignKey('models.id'))
 
 
 def initialize():

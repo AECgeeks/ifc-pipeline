@@ -28,6 +28,7 @@ import os
 import threading
 
 from collections import defaultdict
+from flask_dropzone import Dropzone
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for
@@ -40,6 +41,12 @@ import worker
 import database
 
 application = Flask(__name__)
+dropzone = Dropzone(application)
+application.config['DROPZONE_ALLOWED_FILE_CUSTOM'] = True
+application.config['DROPZONE_ALLOWED_FILE_TYPE'] = '.ifc'
+application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
+application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
+
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
@@ -96,6 +103,39 @@ def process_upload(filewriter, callback_url=None):
     return id
     
 
+
+def process_upload_multiple(files, callback_url=None):
+    id = utils.generate_id()
+    d = utils.storage_dir_for_id(id)
+    os.makedirs(d)
+   
+    file_id = 0
+    session = database.Session()
+    m = database.model(id, '')   
+    session.add(m)
+  
+    for file in files:
+        fn = file.filename
+        filewriter = lambda fn: file.save(fn)
+        filewriter(os.path.join(d, id+"_"+str(file_id)+".ifc"))
+        file_id += 1
+        
+        m.files.append(database.file(id, ''))
+        session.commit()
+
+    
+    session.close()
+    
+    if DEVELOPMENT:
+        t = threading.Thread(target=lambda: worker.process_multiple(id, callback_url))
+        t.start()
+    else:
+        q.enqueue(worker.process, id, callback_url)
+
+    return id
+
+
+
 @application.route('/', methods=['POST'])
 def put_main():
     """
@@ -114,14 +154,22 @@ def put_main():
       '200':
         description: redirect
     """
-    
-    file = request.files["ifc"]
-    id = process_upload(lambda fn: file.save(fn))
+    ids = []
+   
+    files = []
+    for key, f in request.files.items():
+        if key.startswith('file'):
+            file = f
+            files.append(file)    
+
+    id = process_upload_multiple(files)
+
+       
     return redirect(url_for('check_viewer', id=id))
 
 
 @application.route('/p/<id>', methods=['GET'])
-def check_viewer(id):
+def check_viewer(id):    
     if not utils.validate_id(id):
         abort(404)
     return render_template('progress.html', id=id)    
@@ -140,6 +188,7 @@ def get_progress(id):
 def get_viewer(id):
     if not utils.validate_id(id):
         abort(404)
+
 
     glbfn = os.path.join(utils.storage_dir_for_id(id), id + ".glb")
     if not os.path.exists(glbfn):

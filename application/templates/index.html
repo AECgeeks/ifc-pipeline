@@ -6,14 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
 
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
+    {{ dropzone.load_css() }}
+    {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%; min-height: 400px;') }}
 <body>
 
-<form class="upload" action="" method="post" enctype="multipart/form-data">
-    <label style='margin-top: 32px; display: block;'>IFC file:</label>
-    <input type="file" name="ifc" />
-    
-    <input type="submit" />
-</form>
+    <h3 style="text-align: center;">Upload IFC files</h3>
+
+
+{{ dropzone.create(action='put_main') }}
+
+{{ dropzone.load_js() }}
+{{ dropzone.config() }}
+
 
 </body>
 </html>

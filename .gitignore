@@ -1,0 +1,7 @@
+*.ifc
+*.pyc
+docker-volumes
+application/_pycache_
+application/static/bimsurfer
+application/nix/IfcConvert
+application/ifc-pipeline.db
