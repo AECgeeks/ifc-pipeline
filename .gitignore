@@ -3,5 +3,6 @@
 docker-volumes
 application/_pycache_
 application/static/bimsurfer
+application/static/dropzone.css
 application/nix/IfcConvert
 application/ifc-pipeline.db
