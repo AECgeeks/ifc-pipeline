@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>IfcOpenShell viewer</title>
     <meta charset="utf-8">
@@ -8,47 +9,56 @@
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
     {{ dropzone.load_css() }}
     {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%; min-height: 400px;') }}
+
 <body>
 
     <div style="text-align: center;">
         <h3 style="text-align: center;">Upload IFC files</h3>
-    <button id="submit" style='text-align: center;'>Submit</button>
-</div>
+        <button id="submit" style='text-align: center;'>Submit</button>
+    </div>
 
 
 
-{{ dropzone.create('put_main') }}
-{{ dropzone.load_js() }}
+    {{ dropzone.create('put_main') }}
+    {{ dropzone.load_js() }}
 
 
-<script>
-    Dropzone.options.myDropzone = {
-    autoProcessQueue: false,
-    acceptedFiles: ".ifc",
-    parallelUploads: 10,
-    addRemoveLinks: true,
-    init: function() {
-        var submitButton = document.querySelector("#submit")
-        myDropzone = this; 
+    <script>
+        Dropzone.options.myDropzone = {
+            autoProcessQueue: false,
+            acceptedFiles: ".ifc",
+            parallelUploads: 10,
+            addRemoveLinks: true,
+            init: function () {
+                var submitButton = document.querySelector("#submit")
+                myDropzone = this;
 
-        submitButton.addEventListener("click", function() {
-        myDropzone.processQueue(); 
-        
-        });
+                submitButton.addEventListener("click", function () {
+                    myDropzone.removeEventListeners();
+                    myDropzone.processQueue();
 
 
-        this.on("success", function (file, response) {
 
-            window.location = response.url;
+                });
 
-            });
 
-    }
-    };
+                this.on("success", function (file, response) {
 
-</script>
+                    window.location = response.url;
+
+
+                });
+
+
+
+
+            }
+        };
+
+    </script>
 
 
 
 </body>
+
 </html>
