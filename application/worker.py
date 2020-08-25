@@ -80,7 +80,7 @@ class geometry_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".glb", "-qy"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".glb", "-qyv", "--log-format", "json", "--log-file", "log.json"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -123,7 +123,7 @@ class svg_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--log-file", "log.json", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -179,7 +179,7 @@ def do_process(id):
         task = t(begin_end)
         try:
             task(d, id)
-        except RuntimeError as e:
+        except:
             # Mark ID as failed
             with open(os.path.join(d, 'failed'), 'w') as f:
                 pass

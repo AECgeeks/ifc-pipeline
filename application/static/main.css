@@ -149,3 +149,30 @@ div.bimsurfer-tree-eye-off {
     transform: rotate(360deg);
   }
 }
+
+table {
+    border-collapse: collapse;
+    border-radius: 16px;
+    overflow: hidden;
+    width: 100%;
+    border: 0;
+}
+td {
+    padding-left: 10px;
+}
+tr {
+    background: #f5f5f5;
+}
+table thead tr {
+  height: 60px;
+  background: #ccc;
+}
+table tbody tr {
+  height: 50px;
+}
+th, td {
+  border: none;
+}
+tr:nth-child(2n) {
+    background-color: #f0f0f0;
+}

@@ -25,9 +25,10 @@
 from __future__ import print_function
 
 import os
+import json
 import threading
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response
@@ -142,6 +143,23 @@ def get_progress(id):
     model = session.query(database.model).filter(database.model.code == id).all()[0]
     session.close()
     return jsonify({"progress": model.progress})
+
+
+@application.route('/log/<id>', methods=['GET'])
+def get_log(id):
+    log_entry_type = namedtuple('log_entry_type', ("level", "message", "product"))
+    
+    if not utils.validate_id(id):
+        abort(404)
+    logfn = os.path.join(utils.storage_dir_for_id(id), "log.json")
+    if not os.path.exists(logfn):
+        abort(404)
+    log = []
+    for ln in open(logfn):
+        l = ln.strip()
+        if l:
+            log.append(json.loads(l, object_hook=lambda d: log_entry_type(*(d.get(k, '') for k in log_entry_type._fields))))
+    return render_template('log.html', id=id, log=log)
 
 
 @application.route('/v/<id>', methods=['GET'])
