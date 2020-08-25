@@ -16,32 +16,37 @@
 </div>
 
 
-{{ dropzone.create('put_main') }}
 
-<!-- {{ dropzone.config(redirect_url=url_for('put_main')) }} -->
+{{ dropzone.create('put_main') }}
 {{ dropzone.load_js() }}
-{{ dropzone.config() }}
-{{ dropzone.config(custom_init='dz = this;document.getElementById("submit").addEventListener("click", function handler(e) {dz.processQueue();});',
-                 custom_options='headers:{Accept: "application/json"},autoProcessQueue: false, addRemoveLinks: true, parallelUploads: 20') }}
+
 
 <script>
-
     Dropzone.options.myDropzone = {
+    autoProcessQueue: false,
+    acceptedFiles: ".ifc",
+    parallelUploads: 10,
+    addRemoveLinks: true,
+    init: function() {
+        var submitButton = document.querySelector("#submit")
+        myDropzone = this; 
 
-        init: function() {
+        submitButton.addEventListener("click", function() {
+        myDropzone.processQueue(); 
+        
+        });
 
-            this.on("success", function (file, response) {
 
-                window.location = response.url;
+        this.on("success", function (file, response) {
+
+            window.location = response.url;
 
             });
 
-        }
-
     }
+    };
 
 </script>
-
 
 
 

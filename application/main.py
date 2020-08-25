@@ -42,14 +42,6 @@ import database
 
 application = Flask(__name__)
 dropzone = Dropzone(application)
-application.config['DROPZONE_ALLOWED_FILE_CUSTOM'] = True
-application.config['DROPZONE_ALLOWED_FILE_TYPE'] = '.ifc'
-application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
-application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
-# application.config['DROPZONE_REDIRECT_VIEW']='put_main'
-# application.config['DROPZONE_UPLOAD_ON_CLICK'] = True
-# application.config(redirect_url=url_for('check_viewer', id=id))
-
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
