@@ -10,13 +10,19 @@
     {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%; min-height: 400px;') }}
 <body>
 
-    <h3 style="text-align: center;">Upload IFC files</h3>
+    <div style="text-align: center;">
+        <h3 style="text-align: center;">Upload IFC files</h3>
+    <button id="submit" style='text-align: center;'>Submit</button>
+</div>
 
 
 {{ dropzone.create('put_main') }}
+
 <!-- {{ dropzone.config(redirect_url=url_for('put_main')) }} -->
 {{ dropzone.load_js() }}
-{{ dropzone.config() }}
+<!-- {{ dropzone.config() }} -->
+{{ dropzone.config(custom_init='dz = this;document.getElementById("submit").addEventListener("click", function handler(e) {dz.processQueue();});',
+                 custom_options='autoProcessQueue: false, addRemoveLinks: true, parallelUploads: 20,') }}
 
 
 </body>
