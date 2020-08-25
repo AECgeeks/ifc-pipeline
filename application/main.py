@@ -178,11 +178,19 @@ def put_main():
 
        
     id = process_upload_multiple(files)
-    application.config['DROPZONE_REDIRECT_VIEW'] = url_for('check_viewer', id=id)
-   
+    url = url_for('check_viewer', id=id)
+
   
-       
-    return redirect(url_for('check_viewer', id=id))
+
+    if request.accept_mimetypes.accept_json:
+
+       return jsonify({"url":url})
+
+    else:
+
+        return redirect(url)
+
+ 
 
 
 @application.route('/p/<id>', methods=['GET'])
