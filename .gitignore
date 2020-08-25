@@ -1,5 +1,6 @@
 *.ifc
 *.pyc
+*.cover
 docker-volumes
 application/_pycache_
 application/static/bimsurfer

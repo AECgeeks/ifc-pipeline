@@ -13,8 +13,8 @@
     <h3 style="text-align: center;">Upload IFC files</h3>
 
 
-{{ dropzone.create(action='put_main') }}
-
+{{ dropzone.create('put_main') }}
+<!-- {{ dropzone.config(redirect_url=url_for('put_main')) }} -->
 {{ dropzone.load_js() }}
 {{ dropzone.config() }}
 

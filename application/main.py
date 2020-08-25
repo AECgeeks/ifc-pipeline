@@ -46,6 +46,9 @@ application.config['DROPZONE_ALLOWED_FILE_CUSTOM'] = True
 application.config['DROPZONE_ALLOWED_FILE_TYPE'] = '.ifc'
 application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
 application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
+# application.config['DROPZONE_REDIRECT_VIEW']='put_main'
+# application.config['DROPZONE_UPLOAD_ON_CLICK'] = True
+# application.config(redirect_url=url_for('check_viewer', id=id))
 
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
@@ -82,6 +85,10 @@ def get_main():
     return render_template('index.html')
 
 
+@application.route('/hello', methods=['GET'])
+def test():
+    return "HELLO"
+
 def process_upload(filewriter, callback_url=None):
     id = utils.generate_id()
     d = utils.storage_dir_for_id(id)
@@ -97,6 +104,8 @@ def process_upload(filewriter, callback_url=None):
     if DEVELOPMENT:
         t = threading.Thread(target=lambda: worker.process(id, callback_url))
         t.start()
+
+        
     else:
         q.enqueue(worker.process, id, callback_url)
 
@@ -121,7 +130,8 @@ def process_upload_multiple(files, callback_url=None):
         file_id += 1
         
         m.files.append(database.file(id, ''))
-        session.commit()
+    
+    session.commit()
 
     
     session.close()
@@ -129,8 +139,12 @@ def process_upload_multiple(files, callback_url=None):
     if DEVELOPMENT:
         t = threading.Thread(target=lambda: worker.process_multiple(id, callback_url))
         t.start()
+        
+      
+        
     else:
-        q.enqueue(worker.process, id, callback_url)
+        q.enqueue(worker.process_multiple, id, callback_url)
+
 
     return id
 
@@ -162,14 +176,17 @@ def put_main():
             file = f
             files.append(file)    
 
+       
     id = process_upload_multiple(files)
-
+    application.config['DROPZONE_REDIRECT_VIEW'] = url_for('check_viewer', id=id)
+   
+  
        
     return redirect(url_for('check_viewer', id=id))
 
 
 @application.route('/p/<id>', methods=['GET'])
-def check_viewer(id):    
+def check_viewer(id):
     if not utils.validate_id(id):
         abort(404)
     return render_template('progress.html', id=id)    
