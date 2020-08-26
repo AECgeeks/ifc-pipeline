@@ -29,6 +29,7 @@
             "bimsurfer/lib/domReady!",
         ],
         function (Viewer) {
+            
             var v = new Viewer({
                 domNode: 'right',
                 svgDomNode: 'bottom',
@@ -41,7 +42,7 @@
             v.load3d()
             // v.load2d();
             // v.load3d();
-            // v.loadMetadata('middle');
+            v.loadMetadata('middle');
             // v.loadTreeView('top');
         });
     </script>

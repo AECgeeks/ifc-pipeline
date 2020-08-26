@@ -123,12 +123,27 @@ function (cfg, BimSurfer, StaticTreeRenderer, MetaDataRenderer, Request, Utils, 
             tree.on('visibility-changed', bimSurfer.setVisibility);
         }
         
-        this.loadMetadata = function(domNode) {            
+        this.loadMetadata = function(domNode, part,baseId) {            
             var data = new MetaDataRenderer({
                 domNode: domNode
             });
-            data.addModel({id: 1, src: modelPath + ".xml"});
-            self.metaDataView = data;        
+
+            
+            for(var i=0;i<n_files;i++){
+                var src = modelPath + (part ? `/${part}`: (baseId || '')+"_" + i)
+                
+                data.addModel({id: i, src: src + ".xml"});
+                
+            
+            
+            }
+            self.metaDataView = data;  
+
+
+
+
+
+                  
         };
         
         this.load2d = function() {
