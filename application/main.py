@@ -43,6 +43,9 @@ import database
 application = Flask(__name__)
 dropzone = Dropzone(application)
 
+# application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
+# application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
+
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
 if not DEVELOPMENT:
@@ -205,12 +208,15 @@ def get_progress(id):
 def get_viewer(id):
     if not utils.validate_id(id):
         abort(404)
+    d = utils.storage_dir_for_id(id)
+    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and os.path.join(d, name).endswith('.ifc') ])
+    
 
-
-    glbfn = os.path.join(utils.storage_dir_for_id(id), id + ".glb")
-    if not os.path.exists(glbfn):
-        abort(404)
-        
+    for i in range(n_files):
+        glbfn = os.path.join(utils.storage_dir_for_id(id), id + "_" + str(i) + ".glb")
+        if not os.path.exists(glbfn):
+            abort(404)
+                    
     return render_template('viewer.html', **locals())
 
 
@@ -229,18 +235,24 @@ def get_model(fn):
           example: BSESzzACOXGTedPLzNiNklHZjdJAxTGT.glb
     """
     
+ 
     id, ext = fn.split('.', 1)
-    if not utils.validate_id(id):
+    
+    if not utils.validate_id(id[:-2]):
         abort(404)
   
     if ext not in {"xml", "svg", "glb"}:
         abort(404)
         
-    path = utils.storage_file_for_id(id, ext)
+   
+    path = utils.storage_file_for_id_multiple(id,ext)
+
     
+
     if not os.path.exists(path):
         abort(404)
         
+   
     return send_file(path)
 
 """

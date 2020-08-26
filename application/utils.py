@@ -44,6 +44,12 @@ def storage_file_for_id(id, ext):
     return os.path.join(storage_dir_for_id(id), id + "." + ext)
 
 
+
+def storage_file_for_id_multiple(id, ext):   
+    num = id[-2:]
+    base_id =  id[:-2]
+    return os.path.join(storage_dir_for_id(base_id), base_id + num+ "." + ext)
+
 def validate_id(id):
     return len(set(id) - set(string.ascii_letters)) == 0
 

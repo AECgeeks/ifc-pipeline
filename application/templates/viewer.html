@@ -33,12 +33,16 @@
                 domNode: 'right',
                 svgDomNode: 'bottom',
                 modelId: "{{ id }}",
-                withTreeVisibilityToggle: true
+                withTreeVisibilityToggle: true, 
+                n_files: "{{ n_files }}"
             });
-            v.load2d();
-            v.load3d();
-            v.loadMetadata('middle');
-            v.loadTreeView('top');
+
+            
+            v.load3d()
+            // v.load2d();
+            // v.load3d();
+            // v.loadMetadata('middle');
+            // v.loadTreeView('top');
         });
     </script>
 

@@ -7,3 +7,4 @@ application/static/bimsurfer
 application/static/dropzone.css
 application/nix/IfcConvert
 application/ifc-pipeline.db
+!application/static/bimsurfer/src/MultiModal.js

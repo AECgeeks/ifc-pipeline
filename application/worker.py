@@ -214,6 +214,7 @@ def do_process_multiple(id):
     n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
     
     for i in range(n_files):
+        print("CHECK", id + "_" + str(i))
         for t in tasks:
             begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
             task = t(begin_end)
