@@ -14,14 +14,14 @@
         <tr>
             <th>Severity</th>
             <th>Message</th>
-            <th>Product</th>
+            <th>Instance</th>
         </tr>
     </thead>
     <tbody>
         {% for item in log %}
         <tr>
             {% for row in item %}
-            <td>{{ row }}</td>
+            <td>{{ row[0]|upper + row[1:] }}</td>
             {% endfor %}
         </tr>
         {% endfor %}

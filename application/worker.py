@@ -69,6 +69,14 @@ class task(object):
         self.sub_progress(100)
 
 
+class ifc_validation_task(task):
+    est_time = 1
+
+    def execute(self, directory, id):
+        with open(os.path.join(directory, "log.json"), "w") as f:
+            subprocess.call([sys.executable, "-m", "ifcopenshell.validate", id + ".ifc", "--json"], cwd=directory, stdout=f)
+
+
 class xml_generation_task(task):
     est_time = 1
 
@@ -141,6 +149,7 @@ def do_process(id):
     d = utils.storage_dir_for_id(id)
 
     tasks = [
+        ifc_validation_task,
         xml_generation_task,
         geometry_generation_task,
         svg_generation_task,

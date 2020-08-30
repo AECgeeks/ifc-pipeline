@@ -5,6 +5,7 @@
     <title>IfcOpenShell viewer</title>
     <link href='https://fonts.googleapis.com/css?family=Open+Sans:300,600' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="/static/main.css"/>
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 
     <!--
     <script type="text/javascript" src="/static/bimsurfer/lib/es6-promise-3.2.2.min.js"></script>
@@ -34,7 +35,7 @@
         }
         #left, #right {
             top: 0;
-            bottom: 0;            
+            bottom: 32px;            
             position: absolute;
         }
         #left {
@@ -49,7 +50,41 @@
         #left > div {
             height: 33%;
             border-bottom: solid 1px gray;
-        } 
+        }
+        #left > div:last-child {
+            height: 34%;
+            border-bottom: none;
+        }
+        #footer {
+            bottom: 0px;
+            height: 30px;
+            text-align: center;
+            position: absolute;
+            width: 100%;
+            background: #eee;
+            border-top: solid 1px gray;
+            line-height: 24px;
+        }
+        #footer i, #footer span {
+            vertical-align: middle;
+        }
+        #errors {
+            display: block;
+            float: right;
+            padding-right: 10px;
+            text-decoration: none !important;
+        }
+        #footer a {
+            text-decoration: none;
+            color: #666;
+        }
+        #footer a:hover {
+            color: #000;
+            text-decoration: underline;
+        }
+        #footer a i {
+            font-size: 24px;
+        }
     </style>
 </head>
 <body>
@@ -61,6 +96,21 @@
 </div>
 <div id='right'>
 </div>
+<div id='footer'>
+Powered by <a href='http://ifcopenshell.org/'>IfcOpenShell</a> and <a href='https://github.com/AECgeeks/bimsurfer2'>BIMSurfer2</a> <a href='/log/{{ id }}' id='errors'>...</a>
+</div>
+
+<script>
+fetch('/log/{{ id }}', {headers:{Accept:'text/plain'}}).then(function(r) { return r.text(); }).then(function(log) {
+    var msgs = log.split("\n").filter(function(s) {
+        return s.length;
+    }).map(JSON.parse);
+    var num_warnings = msgs.filter(function(msg) { return msg.level.toLowerCase() == 'warning'; }).length;
+    var num_errors = msgs.filter(function(msg) { return msg.level.toLowerCase() == 'error'; }).length;
+    
+    document.getElementById('errors').innerHTML = ' <i class="fa fa-exclamation-circle" style="color: #c30"></i> <span>' + num_errors + '</span> <i class="fa fa-exclamation-triangle" style="color: #f96"></i> <span>' + num_warnings + '</span>';
+});
+</script>
 
 </body>
 </html>

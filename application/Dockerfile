@@ -13,6 +13,9 @@ RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-b
 RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
+# Temporary 'hotfix'
+RUN wget -O `python3 -c 'import site; print(site.getusersitepackages())'`/validate.py https://raw.githubusercontent.com/IfcOpenShell/IfcOpenShell/v0.6.0/src/ifcopenshell-python/ifcopenshell/validate.py
+
 # Server
 WORKDIR /www
 COPY application/*.py /www/

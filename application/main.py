@@ -154,12 +154,16 @@ def get_log(id):
     logfn = os.path.join(utils.storage_dir_for_id(id), "log.json")
     if not os.path.exists(logfn):
         abort(404)
-    log = []
-    for ln in open(logfn):
-        l = ln.strip()
-        if l:
-            log.append(json.loads(l, object_hook=lambda d: log_entry_type(*(d.get(k, '') for k in log_entry_type._fields))))
-    return render_template('log.html', id=id, log=log)
+            
+    if request.accept_mimetypes.accept_html:
+        log = []
+        for ln in open(logfn):
+            l = ln.strip()
+            if l:
+                log.append(json.loads(l, object_hook=lambda d: log_entry_type(*(d.get(k, '') for k in log_entry_type._fields))))
+        return render_template('log.html', id=id, log=log)
+    else:
+        return send_file(logfn, mimetype='text/plain')
 
 
 @application.route('/v/<id>', methods=['GET'])
