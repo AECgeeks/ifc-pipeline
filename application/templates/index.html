@@ -9,7 +9,37 @@
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
     {{ dropzone.load_css() }}
     {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%; min-height: 400px;') }}
+    
+    <style>
+        .dropzone .dz-preview .dz-image {
+            width: 300px;
+            background: #eee !important;
+            border: solid 1px #ddd;
+        }
 
+        .dropzone .dz-preview .dz-progress {
+            width: 200px;
+            margin-left: -100px;
+        }
+
+        .dropzone * {
+            border-radius: 0 !important;
+        }
+        
+        .dropzone .dz-preview .dz-details .dz-size {
+            margin-bottom: 2em;
+        }
+        
+        .dropzone {
+            border: 2px dashed #bbb;
+            border-radius: 20px;
+            background: #fafafa;
+        }
+        
+        .dropzone .dz-preview .dz-details .dz-filename span, .dropzone .dz-preview .dz-details .dz-size span {
+            background: none;
+        }
+    </style>
 <body>
 
     <div style="text-align: center;">
@@ -17,19 +47,17 @@
         <button id="submit" style='text-align: center;'>Submit</button>
     </div>
 
-
-
     {{ dropzone.create('put_main') }}
     {{ dropzone.load_js() }}
 
-
     <script>
+        Dropzone.prototype.defaultOptions.dictDefaultMessage = "Drop files or click here to upload";
         Dropzone.options.myDropzone = {
             autoProcessQueue: false,
             acceptedFiles: ".ifc",
-            parallelUploads: 10,
-            uploadMultiple:true,
-            addRemoveLinks: true,
+            parallelUploads: 1000,
+            uploadMultiple: true,
+            addRemoveLinks: false,
             init: function () {
                 var submitButton = document.querySelector("#submit")
                 myDropzone = this;
@@ -37,29 +65,13 @@
                 submitButton.addEventListener("click", function () {
                     myDropzone.removeEventListeners();
                     myDropzone.processQueue();
-
-
-
                 });
-
 
                 this.on("success", function (file, response) {
-
                     window.location = response.url;
-
-
                 });
-
-
-
-
             }
         };
-
     </script>
-
-
-
 </body>
-
 </html>
