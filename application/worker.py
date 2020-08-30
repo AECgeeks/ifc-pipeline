@@ -131,7 +131,7 @@ class svg_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--log-file", "log.json", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
