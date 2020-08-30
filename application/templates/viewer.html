@@ -97,11 +97,11 @@
 <div id='right'>
 </div>
 <div id='footer'>
-Powered by <a href='http://ifcopenshell.org/'>IfcOpenShell</a> and <a href='https://github.com/AECgeeks/bimsurfer2'>BIMSurfer2</a> <a href='/log/{{ id }}' id='errors'>...</a>
+Powered by <a href='http://ifcopenshell.org/'>IfcOpenShell</a> and <a href='https://github.com/AECgeeks/bimsurfer2'>BIMSurfer2</a> <a href='/log/{{ id }}.html' id='errors'>...</a>
 </div>
 
 <script>
-fetch('/log/{{ id }}', {headers:{Accept:'text/plain'}}).then(function(r) { return r.text(); }).then(function(log) {
+fetch('/log/{{ id }}.json').then(function(r) { return r.text(); }).then(function(log) {
     var msgs = log.split("\n").filter(function(s) {
         return s.length;
     }).map(JSON.parse);
