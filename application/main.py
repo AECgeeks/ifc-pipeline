@@ -145,17 +145,20 @@ def get_progress(id):
     return jsonify({"progress": model.progress})
 
 
-@application.route('/log/<id>', methods=['GET'])
-def get_log(id):
-    log_entry_type = namedtuple('log_entry_type', ("level", "message", "product"))
+@application.route('/log/<id>.<ext>', methods=['GET'])
+def get_log(id, ext):
+    log_entry_type = namedtuple('log_entry_type', ("level", "message", "instance", "product"))
     
+    if ext not in {'html', 'json'}:
+        abort(404)
+        
     if not utils.validate_id(id):
         abort(404)
     logfn = os.path.join(utils.storage_dir_for_id(id), "log.json")
     if not os.path.exists(logfn):
         abort(404)
             
-    if request.accept_mimetypes.accept_html:
+    if ext == 'html':
         log = []
         for ln in open(logfn):
             l = ln.strip()
