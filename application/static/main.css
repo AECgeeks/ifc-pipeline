@@ -150,29 +150,29 @@ div.bimsurfer-tree-eye-off {
   }
 }
 
-table {
+.log table {
     border-collapse: collapse;
     border-radius: 16px;
     overflow: hidden;
     width: 100%;
     border: 0;
 }
-td {
+.log td {
     padding-left: 10px;
 }
-tr {
+.log tr {
     background: #f5f5f5;
 }
-table thead tr {
+.log table thead tr {
   height: 60px;
   background: #ccc;
 }
-table tbody tr {
+.log table tbody tr {
   height: 50px;
 }
-th, td {
+.log th, .log td {
   border: none;
 }
-tr:nth-child(2n) {
+.log tr:nth-child(2n) {
     background-color: #f0f0f0;
 }
