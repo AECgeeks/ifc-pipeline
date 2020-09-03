@@ -111,16 +111,27 @@ function (cfg, BimSurfer, StaticTreeRenderer, MetaDataRenderer, Request, Utils, 
             }
         }        
 
-        this.loadTreeView = function(domNode) {
+        this.loadTreeView = function(domNode, part, baseId) {
             var tree = new StaticTreeRenderer({
                 domNode: domNode,
                 withVisibilityToggle: args.withTreeVisibilityToggle
             });
-            tree.addModel({id: 1, src: modelPath + ".xml"});
+
+
+            for(var i=0;i < n_files;i++){
+                var src = modelPath + (part ? `/${part}`: (baseId || '')+"_" + i)
+                tree.addModel({id: i, src: src + ".xml"});
+              
+
+            }
+
             tree.build();
-            self.treeView = tree;
             tree.on('click', makePartial(processSelectionEvent, tree));
             tree.on('visibility-changed', bimSurfer.setVisibility);
+
+
+            self.treeView = tree;
+           
         }
         
         this.loadMetadata = function(domNode, part,baseId) {            
