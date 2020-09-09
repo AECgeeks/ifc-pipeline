@@ -80,9 +80,6 @@ def get_main():
     return render_template('index.html')
 
 
-@application.route('/hello', methods=['GET'])
-def test():
-    return "HELLO"
 
 def process_upload(filewriter, callback_url=None):
     id = utils.generate_id()
