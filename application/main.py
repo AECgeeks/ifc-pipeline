@@ -25,13 +25,14 @@
 from __future__ import print_function
 
 import os
+import json
 import threading
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from flask_dropzone import Dropzone
 
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for
+from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response
 from flask_cors import CORS
 from flask_basicauth import BasicAuth
 from flasgger import Swagger
@@ -47,6 +48,13 @@ dropzone = Dropzone(application)
 # application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
+
+
+if not DEVELOPMENT and os.path.exists("/version"):
+    PIPELINE_POSTFIX = "." + open("/version").read().strip()
+else:
+    PIPELINE_POSTFIX = ""
+
 
 if not DEVELOPMENT:
     # In some setups this proved to be necessary for url_for() to pick up HTTPS
@@ -72,7 +80,7 @@ if not DEVELOPMENT:
     from redis import Redis
     from rq import Queue
 
-    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")))
+    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")), default_timeout=3600)
 
 
 @application.route('/', methods=['GET'])
@@ -198,7 +206,32 @@ def get_progress(id):
         abort(404)
     session = database.Session()
     model = session.query(database.model).filter(database.model.code == id).all()[0]
+    session.close()
     return jsonify({"progress": model.progress})
+
+
+@application.route('/log/<id>.<ext>', methods=['GET'])
+def get_log(id, ext):
+    log_entry_type = namedtuple('log_entry_type', ("level", "message", "instance", "product"))
+    
+    if ext not in {'html', 'json'}:
+        abort(404)
+        
+    if not utils.validate_id(id):
+        abort(404)
+    logfn = os.path.join(utils.storage_dir_for_id(id), "log.json")
+    if not os.path.exists(logfn):
+        abort(404)
+            
+    if ext == 'html':
+        log = []
+        for ln in open(logfn):
+            l = ln.strip()
+            if l:
+                log.append(json.loads(l, object_hook=lambda d: log_entry_type(*(d.get(k, '') for k in log_entry_type._fields))))
+        return render_template('log.html', id=id, log=log)
+    else:
+        return send_file(logfn, mimetype='text/plain')
 
 
 @application.route('/v/<id>', methods=['GET'])
@@ -208,6 +241,9 @@ def get_viewer(id):
     d = utils.storage_dir_for_id(id)
     n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and os.path.join(d, name).endswith('.ifc') ])
     
+    failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
+    if os.path.exists(failedfn):
+        return render_template('error.html', id=id)
 
     for i in range(n_files):
         glbfn = os.path.join(utils.storage_dir_for_id(id), id + "_" + str(i) + ".glb")
@@ -235,22 +271,27 @@ def get_model(fn):
  
     id, ext = fn.split('.', 1)
     
-    if not utils.validate_id(id[:-2]):
+    if not utils.validate_id(id):
         abort(404)
   
     if ext not in {"xml", "svg", "glb"}:
-        abort(404)
-        
+        abort(404)        
    
-    path = utils.storage_file_for_id_multiple(id,ext)
-
-    
+    path = utils.storage_file_for_id(id, ext)    
 
     if not os.path.exists(path):
         abort(404)
         
-   
-    return send_file(path)
+    if os.path.exists(path + ".gz"):
+        import mimetypes
+        response = make_response(
+            send_file(path + ".gz", 
+                mimetype=mimetypes.guess_type(fn, strict=False)[0])
+        )
+        response.headers['Content-Encoding'] = 'gzip'
+        return response
+    else:
+        return send_file(path)
 
 """
 # Create a file called routes.py with the following

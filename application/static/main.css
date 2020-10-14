@@ -131,3 +131,48 @@ div.bimsurfer-tree-eye-off {
     font-size: 10pt;
 }
 
+.spinner {
+  position: fixed;
+  top: calc(50% - 64px);
+  left: calc(50% - 64px);
+  width: 128px;
+  height: 128px;
+  border: solid 4px gray;
+  border-bottom-color: white;
+  border-radius: 50%;
+  animation: spin 2s linear infinite;
+  z-index: 9999;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.log table {
+    border-collapse: collapse;
+    border-radius: 16px;
+    overflow: hidden;
+    width: 100%;
+    border: 0;
+}
+.log td {
+    padding-left: 10px;
+}
+.log tr {
+    background: #f5f5f5;
+}
+.log table thead tr {
+  height: 60px;
+  background: #ccc;
+}
+.log table tbody tr {
+  height: 50px;
+}
+.log th, .log td {
+  border: none;
+}
+.log tr:nth-child(2n) {
+    background-color: #f0f0f0;
+}

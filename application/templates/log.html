@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>IfcOpenShell viewer</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
+<body class='log'>
+
+<div style='padding: 100px'>
+<table border="1">
+    <thead>
+        <tr>
+            <th>Severity</th>
+            <th>Message</th>
+            <th>Instance</th>
+            <th>Element</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in log %}
+        <tr>
+            {% for row in item %}
+            <td>{{ row[0]|upper + row[1:] }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+</body>
+</html>
