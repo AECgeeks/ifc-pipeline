@@ -8,7 +8,7 @@
 
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
     {{ dropzone.load_css() }}
-    {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%; min-height: 400px;') }}
+    {{ dropzone.style('border: 2px dashed #0087F7; margin: 20px 10%; min-height: 400px;') }}
     
     <style>
         .dropzone .dz-preview .dz-image {
@@ -40,12 +40,9 @@
             background: none;
         }
     </style>
-<body>
+<body style="text-align: center">
 
-    <div style="text-align: center;">
-        <h3 style="text-align: center;">Upload IFC files</h3>
-        <button id="submit" style='text-align: center;'>Submit</button>
-    </div>
+    <h3>IfcOpenShell viewer</h3>
 
     {{ dropzone.create('put_main') }}
     {{ dropzone.load_js() }}
@@ -73,5 +70,8 @@
             }
         };
     </script>
+    
+    <button id="submit" style="padding: 10px 20px; border-radius:5px">Submit</button>
+    
 </body>
 </html>
