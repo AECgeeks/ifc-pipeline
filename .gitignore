@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.ifc
+*.cover
+docker-volumes
+application/static/bimsurfer
+application/nix
+application/win
+application/ifc-pipeline.db

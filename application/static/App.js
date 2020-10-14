@@ -3,7 +3,8 @@ require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewe
         domNode: 'right',
         svgDomNode: 'bottom',
         modelId: window.MODEL_ID,
-        withTreeVisibilityToggle: true
+        withTreeVisibilityToggle: true,
+        n_files: window.NUM_FILES
     });
     if (window.SPINNER_CLASS) {
         v.setSpinner({className: window.SPINNER_CLASS});

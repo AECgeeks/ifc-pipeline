@@ -29,6 +29,7 @@ import json
 import threading
 
 from collections import defaultdict, namedtuple
+from flask_dropzone import Dropzone
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response
@@ -41,6 +42,10 @@ import worker
 import database
 
 application = Flask(__name__)
+dropzone = Dropzone(application)
+
+# application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
+# application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
@@ -83,6 +88,7 @@ def get_main():
     return render_template('index.html')
 
 
+
 def process_upload(filewriter, callback_url=None):
     id = utils.generate_id()
     d = utils.storage_dir_for_id(id)
@@ -98,11 +104,51 @@ def process_upload(filewriter, callback_url=None):
     if DEVELOPMENT:
         t = threading.Thread(target=lambda: worker.process(id, callback_url))
         t.start()
+
+        
     else:
         q.enqueue(worker.process, id, callback_url)
 
     return id
     
+
+
+def process_upload_multiple(files, callback_url=None):
+    id = utils.generate_id()
+    d = utils.storage_dir_for_id(id)
+    os.makedirs(d)
+   
+    file_id = 0
+    session = database.Session()
+    m = database.model(id, '')   
+    session.add(m)
+  
+    for file in files:
+        fn = file.filename
+        filewriter = lambda fn: file.save(fn)
+        filewriter(os.path.join(d, id+"_"+str(file_id)+".ifc"))
+        file_id += 1
+        
+        m.files.append(database.file(id, ''))
+    
+    session.commit()
+
+    
+    session.close()
+    
+    if DEVELOPMENT:
+        t = threading.Thread(target=lambda: worker.process_multiple(id, callback_url))
+        t.start()
+        
+      
+        
+    else:
+        q.enqueue(worker.process_multiple, id, callback_url)
+
+
+    return id
+
+
 
 @application.route('/', methods=['POST'])
 def put_main():
@@ -122,10 +168,29 @@ def put_main():
       '200':
         description: redirect
     """
-    
-    file = request.files["ifc"]
-    id = process_upload(lambda fn: file.save(fn))
-    return redirect(url_for('check_viewer', id=id))
+    ids = []
+   
+    files = []
+    for key, f in request.files.items():
+        if key.startswith('file'):
+            file = f
+            files.append(file)    
+
+       
+    id = process_upload_multiple(files)
+    url = url_for('check_viewer', id=id)
+
+  
+
+    if request.accept_mimetypes.accept_json:
+
+       return jsonify({"url":url})
+
+    else:
+
+        return redirect(url)
+
+ 
 
 
 @application.route('/p/<id>', methods=['GET'])
@@ -173,16 +238,19 @@ def get_log(id, ext):
 def get_viewer(id):
     if not utils.validate_id(id):
         abort(404)
-
+    d = utils.storage_dir_for_id(id)
+    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and os.path.join(d, name).endswith('.ifc') ])
+    
     failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
     if os.path.exists(failedfn):
         return render_template('error.html', id=id)
 
-    glbfn = os.path.join(utils.storage_dir_for_id(id), id + ".glb")
-    if not os.path.exists(glbfn):
-        abort(404)
-        
-    return render_template('viewer.html', id=id, postfix=PIPELINE_POSTFIX)
+    for i in range(n_files):
+        glbfn = os.path.join(utils.storage_dir_for_id(id), id + "_" + str(i) + ".glb")
+        if not os.path.exists(glbfn):
+            abort(404)
+                    
+    return render_template('viewer.html', **locals())
 
 
 @application.route('/m/<fn>', methods=['GET'])
@@ -200,15 +268,17 @@ def get_model(fn):
           example: BSESzzACOXGTedPLzNiNklHZjdJAxTGT.glb
     """
     
+ 
     id, ext = fn.split('.', 1)
+    
     if not utils.validate_id(id):
         abort(404)
   
     if ext not in {"xml", "svg", "glb"}:
-        abort(404)
-        
-    path = utils.storage_file_for_id(id, ext)
-    
+        abort(404)        
+   
+    path = utils.storage_file_for_id(id, ext)    
+
     if not os.path.exists(path):
         abort(404)
         

@@ -32,6 +32,7 @@ import importlib
 import subprocess
 import tempfile
 import operator
+import shutil
 
 import requests
 
@@ -49,6 +50,9 @@ import database
 
 def set_progress(id, progress):
     session = database.Session()
+   
+    id = id.split("_")[0]
+
     model = session.query(database.model).filter(database.model.code == id).all()[0]
     model.progress = int(progress)
     session.commit()
@@ -57,6 +61,7 @@ def set_progress(id, progress):
 
 class task(object):
     def __init__(self, progress_map):
+       
         print(self.__class__.__name__, progress_map)
         self.begin, self.end = progress_map
 
@@ -116,6 +121,7 @@ class glb_optimize_task(task):
 
 class gzip_task(task):
     est_time = 1
+    order = 2000
     
     def execute(self, directory, id):
         import gzip
@@ -125,6 +131,29 @@ class gzip_task(task):
                 with open(fn, 'rb') as orig_file:
                     with gzip.open(fn + ".gz", 'wb') as zipped_file:
                         zipped_file.writelines(orig_file)
+                        
+                        
+class svg_rename_task(task):
+    """
+    In case of an upload of multiple files copy the SVG file
+    for an aspect model with [\w+]_[0-9].svg to [\w+].svg if
+    and only if the second file does not exist yet or the
+    first file is larger in terms of file size.
+    """
+    
+    est_time = 1
+    order = 1000
+    
+    def execute(self, directory, id):
+        svg1_fn = os.path.join(directory, id + ".svg")
+        svg2_fn = os.path.join(directory, id.split("_")[0] + ".svg")
+        
+        print(svg1_fn, svg2_fn)
+        print(os.path.getsize(svg1_fn))
+        
+        if os.path.exists(svg1_fn):
+            if not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn):
+                shutil.copyfile(svg1_fn, svg2_fn)
 
 
 class svg_generation_task(task):
@@ -197,6 +226,7 @@ def do_process(id):
         
     elapsed = 100
     set_progress(id, elapsed)
+
     
 def process(id, callback_url):
     try:
@@ -208,4 +238,69 @@ def process(id, callback_url):
         status = "failure"        
         
     if callback_url is not None:
+        r = requests.post(callback_url, data={"status": status, "id": id})
+
+
+def do_process_multiple(id):
+    d = utils.storage_dir_for_id(id)
+
+    tasks = [
+        ifc_validation_task,
+        xml_generation_task,
+        geometry_generation_task,
+        svg_generation_task,
+        glb_optimize_task,
+        gzip_task,
+        svg_rename_task
+    ]
+    
+    """
+    # Create a file called task_print.py with the following
+    # example content to add application-specific tasks
+
+    import sys
+    
+    from worker import task as base_task
+    
+    class task(base_task):
+        est_time = 1    
+        
+        def execute(self, directory, id):
+            print("Executing task 'print' on ", id, ' in ', directory, file=sys.stderr)
+    """
+    
+    for fn in glob.glob("task_*.py"):
+        mdl = importlib.import_module(fn.split('.')[0])
+        tasks.append(mdl.task)
+        
+    tasks.sort(key=lambda t: getattr(t, 'order', 10))
+
+    elapsed = 0
+    set_progress(id, elapsed)
+    
+    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
+    
+    total_est_time = sum(map(operator.attrgetter('est_time'), tasks)) * n_files
+    
+    for i in range(n_files):
+        print("CHECK", id + "_" + str(i))
+        for t in tasks:
+            begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
+            task = t(begin_end)
+            task(d, id + "_" + str(i))
+            elapsed += t.est_time
+
+    elapsed = 100
+    set_progress(id, elapsed)
+
+def process_multiple(id, callback_url):
+    try:
+        do_process_multiple(id)
+        status = "success"
+    except Exception as e:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        status = "failure"        
+
+    if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})
