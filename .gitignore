@@ -1,10 +1,9 @@
+__pycache__/
+*.py[cod]
 *.ifc
-*.pyc
 *.cover
 docker-volumes
-application/_pycache_
 application/static/bimsurfer
-application/static/dropzone.css
-application/nix/IfcConvert
+application/nix
+application/win
 application/ifc-pipeline.db
-!application/static/bimsurfer/src/MultiModal.js
