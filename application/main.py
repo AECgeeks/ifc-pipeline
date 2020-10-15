@@ -239,16 +239,22 @@ def get_viewer(id):
     if not utils.validate_id(id):
         abort(404)
     d = utils.storage_dir_for_id(id)
-    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and os.path.join(d, name).endswith('.ifc') ])
+    
+    ifc_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and name.endswith('.ifc')]
+    
+    if len(ifc_files) == 0:
+        abort(404)
     
     failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
     if os.path.exists(failedfn):
         return render_template('error.html', id=id)
 
-    for i in range(n_files):
-        glbfn = os.path.join(utils.storage_dir_for_id(id), id + "_" + str(i) + ".glb")
+    for ifc_fn in ifc_files:
+        glbfn = ifc_fn.replace(".ifc", ".glb")
         if not os.path.exists(glbfn):
             abort(404)
+            
+    n_files = len(ifc_files) if "_" in ifc_files[0] else None
                     
     return render_template('viewer.html', **locals())
 

@@ -23,7 +23,7 @@
     {% endif %}
     <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
     
-    <script type="text/javascript">window.MODEL_ID = "{{ id }}"; window.SPINNER_CLASS = 'spinner'; window.NUM_FILES = {{ n_files }};</script>
+    <script type="text/javascript">window.MODEL_ID = "{{ id }}"; window.SPINNER_CLASS = 'spinner'; window.NUM_FILES = {{ n_files or 0 }};</script>
     <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App{{postfix}}.js"></script>
     <style>
         html, body {
