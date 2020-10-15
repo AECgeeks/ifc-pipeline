@@ -173,9 +173,9 @@ class svg_generation_task(task):
                 self.sub_progress(i)
 
 
-
 def do_process(id):
     d = utils.storage_dir_for_id(id)
+    input_files = [name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))]
 
     tasks = [
         ifc_validation_task,
@@ -186,73 +186,9 @@ def do_process(id):
         gzip_task
     ]
     
-    """
-    # Create a file called task_print.py with the following
-    # example content to add application-specific tasks
-
-    import sys
-    
-    from worker import task as base_task
-    
-    class task(base_task):
-        est_time = 1    
-        
-        def execute(self, directory, id):
-            print("Executing task 'print' on ", id, ' in ', directory, file=sys.stderr)
-    """
-    
-    for fn in glob.glob("task_*.py"):
-        mdl = importlib.import_module(fn.split('.')[0])
-        tasks.append(mdl.task)
-        
-    tasks.sort(key=lambda t: getattr(t, 'order', 10))
-
-    elapsed = 0
-    set_progress(id, elapsed)
-    
-    total_est_time = sum(map(operator.attrgetter('est_time'), tasks))
-    
-    for t in tasks:
-        begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
-        task = t(begin_end)
-        try:
-            task(d, id)
-        except:
-            # Mark ID as failed
-            with open(os.path.join(d, 'failed'), 'w') as f:
-                pass
-            break
-        elapsed += t.est_time
-        
-    elapsed = 100
-    set_progress(id, elapsed)
-
-    
-def process(id, callback_url):
-    try:
-        do_process(id)
-        status = "success"
-    except Exception as e:
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        status = "failure"        
-        
-    if callback_url is not None:
-        r = requests.post(callback_url, data={"status": status, "id": id})
-
-
-def do_process_multiple(id):
-    d = utils.storage_dir_for_id(id)
-
-    tasks = [
-        ifc_validation_task,
-        xml_generation_task,
-        geometry_generation_task,
-        svg_generation_task,
-        glb_optimize_task,
-        gzip_task,
-        svg_rename_task
-    ]
+    is_multiple = any("_" in n for n in input_files)
+    if is_multiple:
+        tasks.append(svg_rename_task)
     
     """
     # Create a file called task_print.py with the following
@@ -283,24 +219,36 @@ def do_process_multiple(id):
     total_est_time = sum(map(operator.attrgetter('est_time'), tasks)) * n_files
     
     for i in range(n_files):
-        print("CHECK", id + "_" + str(i))
         for t in tasks:
             begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
             task = t(begin_end)
-            task(d, id + "_" + str(i))
+            id_i = "%s_%d" % (id, i) if is_multiple else id
+            try:
+                task(d, id_i)
+            except:
+                traceback.print_exc(file=sys.stdout)
+                # Mark ID as failed
+                with open(os.path.join(d, 'failed'), 'w') as f:
+                    pass
+                break
             elapsed += t.est_time
 
     elapsed = 100
     set_progress(id, elapsed)
 
-def process_multiple(id, callback_url):
+
+def process(id, callback_url):
+    print('aa')
+    print("a")
     try:
-        do_process_multiple(id)
+        do_process(id)
+        print("a")
         status = "success"
     except Exception as e:
-        import traceback
-        traceback.print_exc(file=sys.stderr)
+        print("b")
+        traceback.print_exc(file=sys.stdout)
         status = "failure"        
 
+    print("c")
     if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})

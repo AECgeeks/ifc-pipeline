@@ -128,23 +128,16 @@ def process_upload_multiple(files, callback_url=None):
         filewriter = lambda fn: file.save(fn)
         filewriter(os.path.join(d, id+"_"+str(file_id)+".ifc"))
         file_id += 1
-        
         m.files.append(database.file(id, ''))
     
     session.commit()
-
-    
     session.close()
     
     if DEVELOPMENT:
-        t = threading.Thread(target=lambda: worker.process_multiple(id, callback_url))
-        t.start()
-        
-      
-        
+        t = threading.Thread(target=lambda: worker.process(id, callback_url))
+        t.start()        
     else:
-        q.enqueue(worker.process_multiple, id, callback_url)
-
+        q.enqueue(worker.process, id, callback_url)
 
     return id
 
@@ -178,19 +171,12 @@ def put_main():
 
        
     id = process_upload_multiple(files)
-    url = url_for('check_viewer', id=id)
-
-  
+    url = url_for('check_viewer', id=id) 
 
     if request.accept_mimetypes.accept_json:
-
-       return jsonify({"url":url})
-
+        return jsonify({"url":url})
     else:
-
         return redirect(url)
-
- 
 
 
 @application.route('/p/<id>', methods=['GET'])
