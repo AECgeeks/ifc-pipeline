@@ -256,7 +256,12 @@ def get_viewer(id):
             
     n_files = len(ifc_files) if "_" in ifc_files[0] else None
                     
-    return render_template('viewer.html', **locals())
+    return render_template(
+        'viewer.html',
+        id=id,
+        n_files=n_files,
+        postfix=PIPELINE_POSTFIX
+    )
 
 
 @application.route('/m/<fn>', methods=['GET'])
