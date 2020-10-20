@@ -61,16 +61,16 @@ def set_progress(id, progress):
 
 class task(object):
     def __init__(self, progress_map):
-       
-        print(self.__class__.__name__, progress_map)
+        import inspect
+        print(self.__class__.__name__, inspect.getfile(type(self)), *progress_map)
         self.begin, self.end = progress_map
 
     def sub_progress(self, i):
         set_progress(self.id, self.begin + (self.end - self.begin) * i / 100.)
 
-    def __call__(self, directory, id):
+    def __call__(self, directory, id, *args):
         self.id = id
-        self.execute(directory, id)
+        self.execute(directory, id, *args)
         self.sub_progress(100)
 
 
@@ -148,9 +148,6 @@ class svg_rename_task(task):
         svg1_fn = os.path.join(directory, id + ".svg")
         svg2_fn = os.path.join(directory, id.split("_")[0] + ".svg")
         
-        print(svg1_fn, svg2_fn)
-        print(os.path.getsize(svg1_fn))
-        
         if os.path.exists(svg1_fn):
             if not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn):
                 shutil.copyfile(svg1_fn, svg2_fn)
@@ -186,6 +183,8 @@ def do_process(id):
         gzip_task
     ]
     
+    tasks_on_aggregate = []
+    
     is_multiple = any("_" in n for n in input_files)
     if is_multiple:
         tasks.append(svg_rename_task)
@@ -207,48 +206,60 @@ def do_process(id):
     
     for fn in glob.glob("task_*.py"):
         mdl = importlib.import_module(fn.split('.')[0])
-        tasks.append(mdl.task)
+        if getattr(mdl.task, 'aggregate_model', False):
+            tasks_on_aggregate.append(mdl.task)
+        else:
+            tasks.append(mdl.task)
         
     tasks.sort(key=lambda t: getattr(t, 'order', 10))
+    tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))
 
     elapsed = 0
     set_progress(id, elapsed)
     
     n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
     
-    total_est_time = sum(map(operator.attrgetter('est_time'), tasks)) * n_files
+    total_est_time = \
+        sum(map(operator.attrgetter('est_time'), tasks)) * n_files + \
+        sum(map(operator.attrgetter('est_time'), tasks_on_aggregate))
+        
+    def run_task(t, args, aggregate_model=False):
+        nonlocal elapsed
+        begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
+        task = t(begin_end)
+        try:
+            task(d, *args)
+        except:
+            traceback.print_exc(file=sys.stdout)
+            # Mark ID as failed
+            with open(os.path.join(d, 'failed'), 'w') as f:
+                pass
+            return False
+        elapsed += t.est_time
+        return True
     
     for i in range(n_files):
         for t in tasks:
-            begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
-            task = t(begin_end)
-            id_i = "%s_%d" % (id, i) if is_multiple else id
-            try:
-                task(d, id_i)
-            except:
-                traceback.print_exc(file=sys.stdout)
-                # Mark ID as failed
-                with open(os.path.join(d, 'failed'), 'w') as f:
-                    pass
+            if not run_task(t, ["%s_%d" % (id, i) if is_multiple else id]):
                 break
-            elapsed += t.est_time
+        # to break out of nested loop
+        else: continue
+        break
+            
+    for t in tasks_on_aggregate:
+        run_task(t, [id, input_files], aggregate_model=True)
 
     elapsed = 100
     set_progress(id, elapsed)
 
 
 def process(id, callback_url):
-    print('aa')
-    print("a")
     try:
         do_process(id)
-        print("a")
         status = "success"
     except Exception as e:
-        print("b")
         traceback.print_exc(file=sys.stdout)
         status = "failure"        
 
-    print("c")
     if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})
