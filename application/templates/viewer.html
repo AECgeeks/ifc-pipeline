@@ -5,13 +5,20 @@
     <title>IfcOpenShell viewer</title>
     <link href='https://fonts.googleapis.com/css?family=Open+Sans:300,600' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="/static/main.css"/>
-     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 
-    <!--
-    <script type="text/javascript" src="/static/bimsurfer/lib/es6-promise-3.2.2.min.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/arraybuffer-slice.js"></script>
-    <script type="text/javascript">ES6Promise.polyfill()</script>
-    -->
+    <script type="text/javascript">
+        var isIE = !!window.MSInputMethodContext;
+        if (isIE) {
+            document.write('<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/fetch.umd.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/String.startsWith.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/Array.from.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/Object.entries.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/Object.assign.js"><\/script>');
+        }
+    </script>
     
     {% if postfix %}
     <script type="text/javascript" src="/static/bimsurfer/lib/three.gltf.orbit.draco.min.js"></script>

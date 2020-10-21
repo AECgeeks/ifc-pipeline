@@ -40,7 +40,8 @@ h1.logo {
 }
 
 .bimsurfer-static-tree, .bimsurfer-metadata {
-    overflow: hidden scroll;
+    overflow: hidden;
+    overflow-y: scroll;
 }
 
 .bimsurfer-static-tree, .bimsurfer-static-tree * {
