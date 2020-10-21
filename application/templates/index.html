@@ -5,6 +5,13 @@
     <title>IfcOpenShell viewer</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+    
+    <script>
+        var isIE = !!window.MSInputMethodContext;
+        if (isIE) {
+            FileList.prototype.map = function(fn) { var r = []; for (var i = 0; i < this.length; ++i) { r.push(fn(this[i])); } return r; }
+        }
+    </script>
 
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
     {{ dropzone.load_css() }}

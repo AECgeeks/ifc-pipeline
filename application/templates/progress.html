@@ -5,8 +5,16 @@
     <title>IfcOpenShell viewer</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
-
-    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='main.css') }}">
+    
+    <script type="text/javascript">
+        var isIE = !!window.MSInputMethodContext;
+        if (isIE) {
+            document.write('<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"><\/script>');
+            document.write('<script type="text/javascript" src="/static/lib/fetch.umd.js"><\/script>');
+        }
+    </script>
+    
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='main.css') }}">
 
 <body>
     <div class='container'>
@@ -21,7 +29,7 @@
         var bar = document.querySelector(".bar")
         var percentage = document.querySelector(".percentage")
         function poll() {
-            fetch("/pp/{{ id }}").then(r => r.json()).then((r) => {
+            fetch("/pp/{{ id }}").then(function(r) { return r.json(); }).then(function(r) {
                 if (r.progress === 100) {
                     window.location = "/v/{{ id }}";
                 } else {
