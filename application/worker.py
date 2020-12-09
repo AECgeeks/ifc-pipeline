@@ -149,7 +149,7 @@ class svg_rename_task(task):
         svg2_fn = os.path.join(directory, id.split("_")[0] + ".svg")
         
         if os.path.exists(svg1_fn):
-            if not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn):
+            if os.path.exists(svg1_fn) and (not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn)):
                 shutil.copyfile(svg1_fn, svg2_fn)
 
 
