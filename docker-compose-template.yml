@@ -40,18 +40,24 @@ services:
       - frontend
     ports:
       - "80:80"
+    {% if with_https %}
       - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
       - ./docker-volumes/certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c \"nginx -g 'daemon off;' & while true; do nginx -t && nginx -s reload; sleep 1h; done\""
+    {% else %}
+    volumes:
+      - ./nginx_http_only:/etc/nginx/conf.d
+    {% endif %}
     
   voxel:
     build: voxel_server
     expose:
       - "5000"    
   
+  {% if with_https %}
   certbot:
     ports: []
     image: certbot/certbot
@@ -59,6 +65,7 @@ services:
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
       - ./docker-volumes/certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit INT TERM; while true; do certbot renew --webroot -w /var/www/certbot; sleep 12h; done'"
+  {% endif %}
 
   worker:
     build:
