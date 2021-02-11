@@ -47,6 +47,10 @@ services:
       - ./docker-volumes/certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c \"nginx -g 'daemon off;' & while true; do nginx -t && nginx -s reload; sleep 1h; done\""
     
+  voxel:
+    build: voxel_server
+    expose:
+      - "5000"    
   
   certbot:
     ports: []

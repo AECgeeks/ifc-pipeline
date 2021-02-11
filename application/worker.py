@@ -26,6 +26,7 @@ import os
 import sys
 import json
 import glob
+import time
 import platform
 import traceback
 import importlib
@@ -114,9 +115,12 @@ class glb_optimize_task(task):
     est_time = 1
     
     def execute(self, directory, id):
-        if subprocess.call(["gltf-pipeline" + ('.cmd' if on_windows else ''), "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
-            os.rename(os.path.join(directory, id + ".glb"), os.path.join(directory, id + ".unoptimized.glb"))
-            os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
+        try:
+            if subprocess.call(["gltf-pipeline" + ('.cmd' if on_windows else ''), "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
+                os.rename(os.path.join(directory, id + ".glb"), os.path.join(directory, id + ".unoptimized.glb"))
+                os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
+        except FileNotFoundError as e:
+            pass
 
 
 class gzip_task(task):
@@ -253,7 +257,7 @@ def do_process(id):
     set_progress(id, elapsed)
 
 
-def process(id, callback_url):
+def process(id, callback_url, **kwargs):
     try:
         do_process(id)
         status = "success"
@@ -263,3 +267,141 @@ def process(id, callback_url):
 
     if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})
+
+
+def escape_routes(id, files, **kwargs):
+
+        d = utils.storage_dir_for_id(id)
+
+        if kwargs.get('development'):
+            VOXEL_HOST = "http://localhost:5555"
+        else:
+            VOXEL_HOST = "http://voxel:5000" 
+            
+        ESCAPE_ROUTE_LENGTH = 8.0
+
+        files = [('ifc', (fn, open(fn))) for fn in files]
+
+        command = """file = parse("*.ifc")
+surfaces = create_geometry(file)
+voxels = voxelize(surfaces, VOXELSIZE=0.05)
+external = exterior(voxels)
+shell = offset(external)
+shell_inner_outer = offset(shell)
+three_layers = union(shell, shell_inner_outer)
+x = json_stats("vars.json")
+xx = mesh(three_layers, "interior.obj")
+"""
+        
+        command = """file = parse("*.ifc")
+fire_door_filter = filter_attributes(file, OverallWidth=">1.2")
+surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+slabs = create_geometry(file, include={"IfcSlab"})
+doors = create_geometry(file, include={"IfcDoor"})
+fire_doors = create_geometry(fire_door_filter, include={"IfcDoor"})
+surface_voxels = voxelize(surfaces)
+slab_voxels = voxelize(slabs)
+door_voxels = voxelize(doors)
+fire_door_voxels = voxelize(fire_doors)
+walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
+walkable_minus = subtract(walkable, slab_voxels)
+walkable_seed = intersect(door_voxels, walkable_minus)
+surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
+surfaces_padded = offset_xy(surface_voxels, 0.1)
+surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
+walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
+walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+reachable = traverse(walkable_region, walkable_seed_real)
+reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
+reachable_bottom = subtract(reachable, reachable_shifted)
+all_surfaces = create_geometry(file)
+voxels = voxelize(all_surfaces)
+external = exterior(voxels)
+walkable_region_offset = offset_xy(walkable_region, 1)
+walkable_region_incl = union(walkable_region, walkable_region_offset)
+seed_external = intersect(walkable_region_incl, external)
+seed_fire_doors = intersect(walkable_region_incl, fire_door_voxels)
+seed = union(seed_external, seed_fire_doors)
+safe = traverse(walkable_region_incl, seed, %(ESCAPE_ROUTE_LENGTH)f, connectedness=26)
+safe_bottom = intersect(safe, reachable_bottom)
+unsafe = subtract(reachable_bottom, safe)
+safe_interior = subtract(safe_bottom, external)
+x = mesh(unsafe, "unsafe.obj")
+x = mesh(safe_interior, "safe.obj")
+""" % locals()
+
+        values = {'voxelfile': command}
+        try:
+
+            objfn_0 = os.path.join(d, "0.obj")
+            objfn_1 = os.path.join(d, "1.obj")
+            objfn_0_s = os.path.join(d, "0_s.obj")
+            objfn_1_s = os.path.join(d, "1_s.obj")
+            mtlfn = objfn_0[:-5] + '0.mtl'
+            daefn = objfn_0[:-5] + '0.dae'
+            glbfn = daefn[:-4] + '.glb'
+
+            r = requests.post("%s/run" % VOXEL_HOST, files=files, data=values, headers={'accept':'application/json'})
+            vid = json.loads(r.text)['id']
+            
+            # @todo store in db
+            with open(os.path.join(d, "vid"), "w") as vidf:
+                vidf.write(vid)
+            
+            while True:
+                r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
+                progress = r.json()
+                set_progress(id, progress)
+                
+                try:
+                    r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
+                    msgs = r.json()
+                    json.dump(msgs, open(os.path.join(d, "log.json"), "w"))
+                except: pass
+                
+                print(msgs)
+                
+                # @todo this a typo scripted -> script
+                if len(msgs) and msgs[-1]['message'].startswith("scripted finished"):
+                    break
+                else:
+                    time.sleep(1.)
+            
+            with open(mtlfn, 'w') as f:
+                f.write("newmtl red\n")
+                f.write("Kd 1.0 0.0 0.0\n\n")
+                f.write("newmtl green\n")
+                f.write("Kd 0.0 1.0 0.0\n\n")
+                
+            """
+            r = requests.get("%s/run/%s/interior.obj" % (VOXEL_HOST, vid))
+            r.raise_for_status()
+            with open(objfn_0, 'w') as f:
+                f.write('mtllib 0.mtl\n')
+                f.write('usemtl red\n')
+                f.write(r.text) 
+            """            
+
+            r = requests.get("%s/run/%s/unsafe.obj" % (VOXEL_HOST, vid))
+            r.raise_for_status()
+            with open(objfn_0, 'w') as f:
+                f.write('mtllib 0.mtl\n')
+                f.write('usemtl red\n')
+                f.write(r.text)
+                
+            r = requests.get("%s/run/%s/safe.obj" % (VOXEL_HOST, vid))
+            r.raise_for_status()
+            with open(objfn_1, 'w') as f:
+                f.write('mtllib 0.mtl\n')
+                f.write('usemtl green\n')
+                f.write(r.text)
+            
+            for fn in (objfn_0, objfn_1):
+                subprocess.check_call([sys.executable, "simplify_obj.py", fn, fn[:-4] + "_s.obj"])
+
+            subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", objfn_0_s, objfn_1_s, daefn])
+            
+            subprocess.check_call(["COLLADA2GLTF-bin", "-i", daefn, "-o", glbfn, "-b", "1"])
+            
+        except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
+            traceback.print_exc()

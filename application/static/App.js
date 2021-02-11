@@ -15,4 +15,11 @@ require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewe
     v.load3d();
     v.loadMetadata('middle');
     v.loadTreeView('top');
+    
+    if (window.CHECK_ID) {    
+        var loader = new THREE.GLTFLoader();
+        loader.load(`/run/${window.CHECK_ID}/result/resource/gltf/0.glb`, function(gltf) {
+            v.bimSurfer3D.viewer.scene.add(gltf.scene);
+        });
+    }
 });

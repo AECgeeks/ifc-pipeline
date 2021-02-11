@@ -1,3 +1,6 @@
 [submodule "application/bimsurfer"]
 	path = application/bimsurfer
 	url = https://github.com/AECgeeks/BIMsurfer2
+[submodule "voxel_server"]
+	path = voxel_server
+	url = https://github.com/opensourceBIM/voxel_server

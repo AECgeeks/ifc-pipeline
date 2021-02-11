@@ -7,3 +7,4 @@ application/static/bimsurfer
 application/nix
 application/win
 application/ifc-pipeline.db
+models/

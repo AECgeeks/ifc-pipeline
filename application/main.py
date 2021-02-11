@@ -49,7 +49,6 @@ dropzone = Dropzone(application)
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
-
 if not DEVELOPMENT and os.path.exists("/version"):
     PIPELINE_POSTFIX = "." + open("/version").read().strip()
 else:
@@ -88,6 +87,14 @@ def get_main():
     return render_template('index.html')
 
 
+def queue_task(task_name, *args):
+    fn = getattr(worker, task_name)
+    if DEVELOPMENT:
+        t = threading.Thread(target=lambda: fn(*args, **{'development':DEVELOPMENT}))
+        t.start()
+    else:
+        q.enqueue(fn, *args, **{'development':DEVELOPMENT})
+
 
 def process_upload(filewriter, callback_url=None):
     id = utils.generate_id()
@@ -101,18 +108,10 @@ def process_upload(filewriter, callback_url=None):
     session.commit()
     session.close()
     
-    if DEVELOPMENT:
-        t = threading.Thread(target=lambda: worker.process(id, callback_url))
-        t.start()
-
-        
-    else:
-        q.enqueue(worker.process, id, callback_url)
-
+    queue_task("process", id, callback_url)
+    
     return id
     
-
-
 def process_upload_multiple(files, callback_url=None):
     id = utils.generate_id()
     d = utils.storage_dir_for_id(id)
@@ -221,7 +220,8 @@ def get_log(id, ext):
 
 
 @application.route('/v/<id>', methods=['GET'])
-def get_viewer(id):
+@application.route('/v/<id>/<cid>', methods=['GET'])
+def get_viewer(id, cid=None):
     if not utils.validate_id(id):
         abort(404)
     d = utils.storage_dir_for_id(id)
@@ -246,7 +246,8 @@ def get_viewer(id):
         'viewer.html',
         id=id,
         n_files=n_files,
-        postfix=PIPELINE_POSTFIX
+        postfix=PIPELINE_POSTFIX,
+        check_id=cid
     )
 
 
@@ -300,7 +301,5 @@ from main import application
 def test_hello_world():
     return 'Hello world'
 """
-try:
-    import routes
-except ImportError as e:
-    pass
+
+from routes import *
