@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.ifc
 *.cover
+*~
 docker-compose.yml
 docker-volumes
 application/static/bimsurfer
