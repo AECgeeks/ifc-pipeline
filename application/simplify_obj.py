@@ -67,6 +67,7 @@ def construct_graph(adjacency_list):
 
 
 def split_graph_at(vertices, G, breaks):
+    raise NotImplementedError("Reimplement without recursion")
 
     visited = set()
     breaks = set(breaks)
@@ -200,10 +201,20 @@ for gn, g in groups():
                 return arr
 
             def visit(G, v):
-                visited.add(v)
-                nb = list(G[v] - visited)
-                for n in nb:
-                    visit(G, n)
+                # visited.add(v)
+                # nb = list(G[v] - visited)
+                # for n in nb:
+                #     visit(G, n)
+                
+                queue = [v]
+                while queue:
+                    # print(*queue)
+                    v = queue[0]
+                    queue = queue[1:]
+                    
+                    visited.add(v)
+                    nb = list(G[v] - visited - set(queue))
+                    queue.extend(nb)
 
             while len(visited) < len(graph.keys()):
                 v = next(iter(set(graph.keys()) - visited))
