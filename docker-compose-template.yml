@@ -1,6 +1,9 @@
 version: '3'
 
 services:
+
+{% if not db_host %}
+
   db:
     image: postgres:12.1-alpine
     expose:
@@ -9,6 +12,8 @@ services:
       - ./docker-volumes/db:/var/lib/postgresql/data
     environment:
       - POSTGRES_PASSWORD=postgres
+      
+{% endif %}
 
   redis:
     image: redis:5.0.7-alpine
@@ -25,12 +30,16 @@ services:
     environment:
       - MODEL_DIR=/data
       - REDIS_HOST=redis
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST={{ db_host or 'db' }}
+      - POSTGRES_USER={{ db_user or 'postgres' }}
+      - POSTGRES_PASS={{ db_pass or 'postgres' }}
     expose:
       - "5000"
     depends_on:
       - redis
+  {% if not db_host %}
       - db
+  {% endif %}
     volumes:
       - ./models:/data
       
@@ -75,10 +84,14 @@ services:
     environment:
       - MODEL_DIR=/data
       - REDIS_HOST=redis
-      - POSTGRES_HOST=db
       - NUM_WORKERS=2
+      - POSTGRES_HOST={{ db_host or 'db' }}
+      - POSTGRES_USER={{ db_user or 'postgres' }}
+      - POSTGRES_PASS={{ db_pass or 'postgres' }}
     depends_on:
       - redis
+  {% if not db_host %}
       - db
+  {% endif %}
     volumes:
       - ./models:/data

@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--with-https', dest='with_https', action='store_const', const=True, default=True)
 parser.add_argument('--without-https', dest='with_https', action='store_const', const=False, default=True)
 parser.add_argument('--db-host', dest='db_host')
-parser.add_argument('--db-username', dest='db_username')
+parser.add_argument('--db-user', dest='db_user')
 parser.add_argument('--db-pass', dest='db_pass')
 (args, compose_args) = parser.parse_known_args()
 

@@ -36,6 +36,7 @@ from flask import Flask, request, send_file, render_template, abort, jsonify, re
 from flask_cors import CORS
 from flask_basicauth import BasicAuth
 from flasgger import Swagger
+from flask_healthz import healthz, HealthError
 
 import utils
 import worker
@@ -43,6 +44,7 @@ import database
 
 application = Flask(__name__)
 dropzone = Dropzone(application)
+application.register_blueprint(healthz, url_prefix="/health")
 
 # application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
 # application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
@@ -78,8 +80,9 @@ swagger = Swagger(application)
 if not DEVELOPMENT:
     from redis import Redis
     from rq import Queue
-
-    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")), default_timeout=3600)
+    
+    redis_conn = Redis(host=os.environ.get("REDIS_HOST", "localhost"))
+    q = Queue(connection=redis_conn, default_timeout=3600)
 
 
 @application.route('/', methods=['GET'])
@@ -290,6 +293,35 @@ def get_model(fn):
         return response
     else:
         return send_file(path)
+        
+
+def liveness():
+    pass
+
+
+def readiness():
+    try:
+        s = database.Session()
+        assert list(s.execute('select 1')) == [(1,)]
+    except Exception:
+        raise HealthError("Can't connect to database")
+    finally:
+        s.close()
+        
+    if not DEVELOPMENT:
+        try:
+            qs = list(Queue.all(connection=redis_conn))
+            assert qs
+            assert isinstance(qs[0].count, int)
+        except Exception:
+            raise HealthError("Can't connect to queue")
+
+
+application.config['HEALTHZ'] = {
+    "live": liveness,
+    "ready": readiness
+}
+
 
 """
 # Create a file called routes.py with the following

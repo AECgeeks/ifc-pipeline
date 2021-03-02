@@ -37,7 +37,7 @@ DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'developmen
 if DEVELOPMENT:
     engine = create_engine('sqlite:///ifc-pipeline.db', connect_args={'check_same_thread': False})
 else:
-    engine = create_engine('postgresql://postgres:postgres@%s:5432/bimsurfer2' % os.environ.get('POSTGRES_HOST', 'localhost'))
+    engine = create_engine('postgresql://%s:%s@%s:5432/bimsurfer2' % tuple(map(os.environ.get, ('POSTGRES_USER', 'POSTGRES_PASS', 'POSTGRES_HOST'))))
     
 Session = sessionmaker(bind=engine)
 
