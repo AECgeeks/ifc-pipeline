@@ -168,7 +168,16 @@ if args.convert:
 
     for k, cfgs in merge.items():
         with open(os.path.join('merged', k), 'w') as f:
-            dump(do_merge(cfgs, [k]), f, default_flow_style=False)
+            cfg = do_merge(cfgs, [k])
+            
+            # We need to manually patch the access mode. Kompose's approach is to generate accessMode based on
+            # the volume first encountered and then drop further usage of it. This fails for the output/
+            # volume where the first usage is RO which is then translated to ReadOnlyMany
+            # https://github.com/kubernetes/kompose/blob/76565d80b2dccfa2de4b4612557788b1861cc48a/pkg/transformer/kubernetes/kubernetes.go#L533
+            if "persistentvolumeclaim" in k:
+                cfg['spec']['accessModes'] = ['ReadWriteOnce']
+            
+            dump(cfg, f, default_flow_style=False)
     
 else:
 
