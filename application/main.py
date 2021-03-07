@@ -207,7 +207,7 @@ def get_log(id, ext):
         
     if not utils.validate_id(id):
         abort(404)
-    logfn = os.path.join(utils.storage_dir_for_id(id), "log.json")
+    logfn = os.path.join(utils.storage_dir_for_id(id, output=True), "log.json")
     if not os.path.exists(logfn):
         abort(404)
             
@@ -228,6 +228,7 @@ def get_viewer(id, cid=None):
     if not utils.validate_id(id):
         abort(404)
     d = utils.storage_dir_for_id(id)
+    d2 = utils.storage_dir_for_id(id, output=True)
     
     ifc_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and name.endswith('.ifc')]
     
@@ -239,7 +240,7 @@ def get_viewer(id, cid=None):
         return render_template('error.html', id=id)
 
     for ifc_fn in ifc_files:
-        glbfn = ifc_fn.replace(".ifc", ".glb")
+        glbfn = ifc_fn.replace(".ifc", ".glb").replace(d, d2)
         if not os.path.exists(glbfn):
             abort(404)
             
@@ -278,7 +279,7 @@ def get_model(fn):
     if ext not in {"xml", "svg", "glb", "unoptimized.glb"}:
         abort(404)
    
-    path = utils.storage_file_for_id(id, ext)    
+    path = utils.storage_file_for_id(id, ext, output=True)    
 
     if not os.path.exists(path):
         abort(404)

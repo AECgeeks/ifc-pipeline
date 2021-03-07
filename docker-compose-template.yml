@@ -8,10 +8,13 @@ services:
     image: postgres:12.1-alpine
     expose:
       - "5432"
+    labels:
+      kompose.volume.size: 1Gi
     volumes:
       - ./docker-volumes/db:/var/lib/postgresql/data
     environment:
       - POSTGRES_PASSWORD=postgres
+      - PGDATA=/var/lib/postgresql/data/pgdata
       
 {% endif %}
 
@@ -26,9 +29,14 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    entrypoint: sh -c 'python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi'
+    image: aecgeeks/ifc-pipeline:latest
+    entrypoint:
+      - /bin/sh
+      - -c
+      - python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi
     environment:
       - MODEL_DIR=/data
+      - OUTPUT_DIR=/output
       - REDIS_HOST=redis
       - POSTGRES_HOST={{ db_host or 'db' }}
       - POSTGRES_USER={{ db_user or 'postgres' }}
@@ -40,8 +48,11 @@ services:
   {% if not db_host %}
       - db
   {% endif %}
+    labels:
+      kompose.volume.size: 1Gi
     volumes:
       - ./models:/data
+      - ./output:/output:ro
       
   nginx:
     image: nginx:1.17-alpine
@@ -55,14 +66,20 @@ services:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
       - ./docker-volumes/certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c \"nginx -g 'daemon off;' & while true; do nginx -t && nginx -s reload; sleep 1h; done\""
+    entrypoint:
+      - /bin/sh
+      - -c
+      - nginx -g 'daemon off;' & while true; do nginx -t && nginx -s reload; sleep 1h; done
     {% else %}
     volumes:
       - ./nginx_http_only:/etc/nginx/conf.d
     {% endif %}
+    labels:
+      kompose.service.type: loadbalancer
     
   voxel:
     build: voxel_server
+    image: aecgeeks/voxel-server:latest
     expose:
       - "5000"    
   
@@ -73,16 +90,23 @@ services:
     volumes:
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
       - ./docker-volumes/certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit INT TERM; while true; do certbot renew --webroot -w /var/www/certbot; sleep 12h; done'"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - trap exit INT TERM; while true; do certbot renew --webroot -w /var/www/certbot; sleep 12h; done
   {% endif %}
 
   worker:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    entrypoint: supervisord -n
+    image: aecgeeks/ifc-pipeline:latest
+    entrypoint:
+      - supervisord
+      - -n
     environment:
       - MODEL_DIR=/data
+      - OUTPUT_DIR=/output
       - REDIS_HOST=redis
       - NUM_WORKERS=2
       - POSTGRES_HOST={{ db_host or 'db' }}
@@ -93,5 +117,9 @@ services:
   {% if not db_host %}
       - db
   {% endif %}
+    labels:
+      kompose.volume.size: 1Gi
+    # readonly, need to add another volume still for output
     volumes:
-      - ./models:/data
+      - ./models:/data:ro
+      - ./output:/output

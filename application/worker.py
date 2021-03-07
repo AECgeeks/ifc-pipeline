@@ -80,21 +80,21 @@ class ifc_validation_task(task):
 
     def execute(self, directory, id):
         with open(os.path.join(directory, "log.json"), "w") as f:
-            subprocess.call([sys.executable, "-m", "ifcopenshell.validate", id + ".ifc", "--json"], cwd=directory, stdout=f)
+            subprocess.call([sys.executable, "-m", "ifcopenshell.validate", utils.storage_file_for_id(id, "ifc"), "--json"], cwd=directory, stdout=f)
 
 
 class xml_generation_task(task):
     est_time = 1
 
     def execute(self, directory, id):
-        subprocess.call([IFCCONVERT, id + ".ifc", id + ".xml", "-yv"], cwd=directory)
+        subprocess.call([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".xml", "-yv"], cwd=directory)
 
 
 class geometry_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".glb", "-qyv", "--log-format", "json", "--log-file", "log.json"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", "log.json"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -161,7 +161,7 @@ class svg_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--plan", "--model", "--section-height-from-storeys", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor", "IfcAnnotation"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".svg", "-qy", "--plan", "--model", "--section-height-from-storeys", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor", "IfcAnnotation"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -176,7 +176,9 @@ class svg_generation_task(task):
 
 def do_process(id):
     d = utils.storage_dir_for_id(id)
-    input_files = [name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))]
+    input_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))]
+    d = utils.storage_dir_for_id(id, output=True)
+    os.makedirs(d)
 
     tasks = [
         ifc_validation_task,
@@ -221,7 +223,7 @@ def do_process(id):
     elapsed = 0
     set_progress(id, elapsed)
     
-    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
+    n_files = len(input_files)
     
     total_est_time = \
         sum(map(operator.attrgetter('est_time'), tasks)) * n_files + \
@@ -271,7 +273,7 @@ def process(id, callback_url, **kwargs):
 
 def escape_routes(id, files, **kwargs):
 
-        d = utils.storage_dir_for_id(id)
+        d = utils.storage_dir_for_id(id, output=True)
 
         if kwargs.get('development'):
             VOXEL_HOST = "http://localhost:5555"

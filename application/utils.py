@@ -30,19 +30,20 @@ from random import SystemRandom
 choice = lambda seq: SystemRandom().choice(seq)
 letter_set = set(string.ascii_letters)
 
-STORAGE_DIR = os.environ.get("MODEL_DIR", tempfile.gettempdir()) 
+STORAGE_DIR = os.environ.get("MODEL_DIR", tempfile.gettempdir())
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", STORAGE_DIR)
 
 def generate_id():
     return "".join(choice(string.ascii_letters) for i in range(32))
 
 
-def storage_dir_for_id(id):
+def storage_dir_for_id(id, output=False):
     id = id.split("_")[0]
-    return os.path.join(STORAGE_DIR, id[0:1], id[0:2], id[0:3], id)
+    return os.path.join([STORAGE_DIR, OUTPUT_DIR][output], id[0:1], id[0:2], id[0:3], id)
 
 
-def storage_file_for_id(id, ext):
-    return os.path.join(storage_dir_for_id(id), id + "." + ext)
+def storage_file_for_id(id, ext, **kwargs):
+    return os.path.join(storage_dir_for_id(id, **kwargs), id + "." + ext)
 
 
 def validate_id(id):

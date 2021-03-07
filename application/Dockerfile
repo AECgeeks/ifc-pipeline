@@ -24,23 +24,18 @@ RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/
 # Temporary 'hotfix'
 RUN wget  -O `python3 -c 'import site; print(site.getusersitepackages())'`/ifcopenshell/validate.py https://raw.githubusercontent.com/IfcOpenShell/IfcOpenShell/v0.6.0/src/ifcopenshell-python/ifcopenshell/validate.py
 
-# Server
-WORKDIR /www
-COPY application/*.py /www/
-COPY application/templates /www/templates
+WORKDIR /www/static
+RUN npm i -D @babel/preset-env @babel/core @babel/cli
 
+# Get git commit sha in /version
 COPY .git/HEAD /tmp/.git/HEAD
 COPY .git/refs/ /tmp/.git/refs/
 RUN /bin/bash -c '(cat /tmp/.git/$(cat /tmp/.git/HEAD | cut -d \  -f 2)) || cat /tmp/.git/HEAD' > /version
-RUN sed -i "4i<script>console.log('pipeline version: $(cat /version)');</script>" /www/templates/*.html
 RUN rm -rf /tmp/.git
-
-RUN npm i -D @babel/preset-env @babel/core @babel/cli
 
 COPY application/static /www/static/
 COPY application/bimsurfer/bimsurfer /www/static/bimsurfer
 
-WORKDIR /www/static
 # RUN jsdoc -r -d docs bimsurfer
 RUN r.js -o baseUrl=. name=App out=App.built.js optimize=none
 RUN npx babel App.built.js -o App.built.es2015.js --presets=@babel/preset-env --compact false
@@ -50,5 +45,11 @@ RUN uglifyjs --compress -o bimsurfer/lib/three.gltf.orbit.draco.min.js -- bimsur
 RUN rm -rf node_modules package-lock.json
 
 COPY application/queue.conf /etc/supervisord.conf
+
+# Server
+WORKDIR /www
+COPY application/*.py /www/
+COPY application/templates /www/templates
+RUN sed -i "4i<script>console.log('pipeline version: $(cat /version)');</script>" /www/templates/*.html
 
 WORKDIR /www
