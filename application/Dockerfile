@@ -10,7 +10,7 @@ RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 ## 3D output conversion: Move to voxel?
 RUN git clone --recursive https://github.com/KhronosGroup/COLLADA2GLTF
 WORKDIR /COLLADA2GLTF/build
-RUN cmake .. && make -j${nproc} install
+RUN cmake .. && make install
 RUN mv COLLADA2GLTF-bin /usr/local/bin
 
 # IfcConvert v0.6.0
