@@ -381,8 +381,6 @@ x = mesh(safe_interior, "safe.obj")
                     utils.store_file(id + "_log", "json")
                 except: pass
                 
-                print(msgs)
-                
                 # @todo this a typo scripted -> script
                 if len(msgs) and msgs[-1]['message'].startswith("scripted finished"):
                     break
