@@ -52,4 +52,6 @@ COPY application/*.py /www/
 COPY application/templates /www/templates
 RUN sed -i "4i<script>console.log('pipeline version: $(cat /version)');</script>" /www/templates/*.html
 
+RUN python3 -m pip install minio
+
 WORKDIR /www

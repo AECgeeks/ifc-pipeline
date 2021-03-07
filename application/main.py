@@ -106,6 +106,8 @@ def process_upload(filewriter, callback_url=None):
     
     filewriter(os.path.join(d, id+".ifc"))
     
+    utils.store_file(id, "ifc")
+    
     session = database.Session()
     session.add(database.model(id, ''))
     session.commit()
@@ -128,7 +130,11 @@ def process_upload_multiple(files, callback_url=None):
     for file in files:
         fn = file.filename
         filewriter = lambda fn: file.save(fn)
-        filewriter(os.path.join(d, id+"_"+str(file_id)+".ifc"))
+        # @todo
+        id_ = "%s_%d" % (id, file_id)
+        id_ = id
+        filewriter(os.path.join(d, id_ + ".ifc"))
+        utils.store_file(id_, "ifc")
         file_id += 1
         m.files.append(database.file(id, ''))
     
@@ -207,7 +213,9 @@ def get_log(id, ext):
         
     if not utils.validate_id(id):
         abort(404)
-    logfn = os.path.join(utils.storage_dir_for_id(id, output=True), "log.json")
+    
+    logfn = utils.storage_file_for_id(id + "_log", "json", output=True)
+    
     if not os.path.exists(logfn):
         abort(404)
             
@@ -230,21 +238,24 @@ def get_viewer(id, cid=None):
     d = utils.storage_dir_for_id(id)
     d2 = utils.storage_dir_for_id(id, output=True)
     
-    ifc_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and name.endswith('.ifc')]
+    # ifc_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and name.endswith('.ifc')]
+    # @todo
+    # ifc_files = [utils.storage_file_for_id(id, "ifc")]
     
-    if len(ifc_files) == 0:
-        abort(404)
+    # if len(ifc_files) == 0:
+    #     abort(404)
     
-    failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
-    if os.path.exists(failedfn):
-        return render_template('error.html', id=id)
+    # @todo
+    # failedfn = os.path.join(utils.storage_dir_for_id(id), "failed")
+    # if os.path.exists(failedfn):
+    #     return render_template('error.html', id=id)
 
-    for ifc_fn in ifc_files:
-        glbfn = ifc_fn.replace(".ifc", ".glb").replace(d, d2)
-        if not os.path.exists(glbfn):
-            abort(404)
+    # for ifc_fn in ifc_files:
+    glbfn = utils.storage_file_for_id(id, "glb")
+    if not os.path.exists(glbfn):
+        abort(404)
             
-    n_files = len(ifc_files) if "_" in ifc_files[0] else None
+    n_files = None # len(ifc_files) if "_" in ifc_files[0] else None
                     
     return render_template(
         'viewer.html',
@@ -279,7 +290,7 @@ def get_model(fn):
     if ext not in {"xml", "svg", "glb", "unoptimized.glb"}:
         abort(404)
    
-    path = utils.storage_file_for_id(id, ext, output=True)    
+    path = utils.storage_file_for_id(id, ext, output=True)
 
     if not os.path.exists(path):
         abort(404)

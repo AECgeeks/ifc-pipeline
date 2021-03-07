@@ -8,6 +8,8 @@ from jinja2 import Environment, FileSystemLoader
 parser = argparse.ArgumentParser()
 parser.add_argument('--with-https', dest='with_https', action='store_const', const=True, default=True)
 parser.add_argument('--without-https', dest='with_https', action='store_const', const=False, default=True)
+parser.add_argument('--with-minio', dest='with_minio', action='store_const', const=True, default=False)
+parser.add_argument('--without-minio', dest='with_minio', action='store_const', const=False, default=False)
 parser.add_argument('--convert', dest='convert', action='store_const', const=True, default=False)
 parser.add_argument('--db-host', dest='db_host')
 parser.add_argument('--db-user', dest='db_user')
@@ -48,6 +50,7 @@ if args.convert:
         './docker-volumes/certbot/www'  : 'emptyDir',
         './docker-volumes/redis'        : 'emptyDir',
         './docker-volumes/db'           : 'persistentVolumeClaim',
+        './docker-volumes/minio'        : 'persistentVolumeClaim',
         './models'                      : 'persistentVolumeClaim',
         './output'                      : 'persistentVolumeClaim',
         './nginx'                       : 'configMap',

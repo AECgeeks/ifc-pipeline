@@ -63,10 +63,10 @@ def get_file_progress(id):
 @application.route("/run/escape_routes", methods=['POST'])
 def initiate_check():
     id = utils.generate_id()
-    d = utils.storage_dir_for_id(id, output=True)
-    os.makedirs(d)
+    # d = utils.storage_dir_for_id(id, output=True)
+    # os.makedirs(d)
     
-    files = [utils.storage_file_for_id(i, "ifc") for i in request.json['ids']]
+    files = request.json['ids']
     
     session = database.Session()
     session.add(database.model(id, ''))
@@ -93,8 +93,7 @@ def get_check_progress(id):
         
     p = models[0].progress
         
-    d = utils.storage_dir_for_id(id, output=True)
-    fn = os.path.join(d, "0.glb")
+    fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
     if os.path.exists(fn):
         return jsonify({
             "status": "done",
@@ -112,8 +111,7 @@ def get_check_log(id):
     if not utils.validate_id(id):
         abort(404)
         
-    d = utils.storage_dir_for_id(id, output=True)
-    fn = os.path.join(d, "log.json")
+    fn = utils.storage_file_for_id(id + "_log", "json", output=True)
     return send_file(fn)
 
    
@@ -121,8 +119,7 @@ def get_check_log(id):
 def get_check_results(id):
     if not utils.validate_id(id):
         abort(404)
-    d = utils.storage_dir_for_id(id, output=True)
-    fn = os.path.join(d, "0.glb")
+    fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
     if not os.path.exists(fn):
         abort(409)
     return jsonify({
@@ -134,8 +131,7 @@ def get_check_results(id):
 def get_gltf(id, i):
     if i != "0":
         abort(404)
-    d = utils.storage_dir_for_id(id, output=True)
-    fn = os.path.join(d, "0.glb")
+    fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
     if not os.path.exists(fn):
         abort(404)
     return send_file(fn)

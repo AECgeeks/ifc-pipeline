@@ -79,8 +79,10 @@ class ifc_validation_task(task):
     est_time = 1
 
     def execute(self, directory, id):
-        with open(os.path.join(directory, "log.json"), "w") as f:
+        ofn = os.path.join(directory, id + "_log.json")
+        with open(ofn, "w") as f:
             subprocess.call([sys.executable, "-m", "ifcopenshell.validate", utils.storage_file_for_id(id, "ifc"), "--json"], cwd=directory, stdout=f)
+        utils.store_file(id + "_log", "json")
 
 
 class xml_generation_task(task):
@@ -88,13 +90,15 @@ class xml_generation_task(task):
 
     def execute(self, directory, id):
         subprocess.call([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".xml", "-yv"], cwd=directory)
+        utils.store_file(id, "xml")
 
 
 class geometry_generation_task(task):
     est_time = 10
 
     def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", "log.json"], cwd=directory, stdout=subprocess.PIPE)
+        # @todo store this log in a separate file?
+        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", id + "_log.json"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -109,6 +113,9 @@ class geometry_generation_task(task):
         # GLB generation is mandatory to succeed
         if proc.poll() != 0:
             raise RuntimeError()
+            
+        utils.store_file(id, "glb")
+        utils.store_file(id + "_log", "json")
 
                 
 class glb_optimize_task(task):
@@ -121,6 +128,9 @@ class glb_optimize_task(task):
                 os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
         except FileNotFoundError as e:
             pass
+            
+        utils.store_file(id, "glb")
+        utils.store_file(id, ".unoptimized.glb")
 
 
 class gzip_task(task):
@@ -135,6 +145,8 @@ class gzip_task(task):
                 with open(fn, 'rb') as orig_file:
                     with gzip.open(fn + ".gz", 'wb') as zipped_file:
                         zipped_file.writelines(orig_file)
+                        
+                utils.store_file(id, ext + ".gz")
                         
                         
 class svg_rename_task(task):
@@ -155,6 +167,8 @@ class svg_rename_task(task):
         if os.path.exists(svg1_fn):
             if not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn):
                 shutil.copyfile(svg1_fn, svg2_fn)
+                
+        utils.store_file(id.split("_")[0], "svg")
 
 
 class svg_generation_task(task):
@@ -172,13 +186,16 @@ class svg_generation_task(task):
             if ch and ord(ch) == ord('.'):
                 i += 1
                 self.sub_progress(i)
+                
+        utils.store_file(id, "svg")
 
 
 def do_process(id):
-    d = utils.storage_dir_for_id(id)
-    input_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))]
+    # @todo
+    input_files = [utils.storage_file_for_id(id, "ifc")]
     d = utils.storage_dir_for_id(id, output=True)
-    os.makedirs(d)
+    if not os.path.exists(d):
+        os.makedirs(d)
 
     tasks = [
         ifc_validation_task,
@@ -281,7 +298,8 @@ def escape_routes(id, files, **kwargs):
             VOXEL_HOST = "http://voxel:5000" 
             
         ESCAPE_ROUTE_LENGTH = 8.0
-
+        
+        files = [utils.ensure_file(f, "ifc") for f in files]
         files = [('ifc', (fn, open(fn))) for fn in files]
 
         command = """file = parse("*.ifc")
@@ -335,10 +353,10 @@ x = mesh(safe_interior, "safe.obj")
         values = {'voxelfile': command}
         try:
 
-            objfn_0 = os.path.join(d, "0.obj")
-            objfn_1 = os.path.join(d, "1.obj")
-            objfn_0_s = os.path.join(d, "0_s.obj")
-            objfn_1_s = os.path.join(d, "1_s.obj")
+            objfn_0 = os.path.join(d, id + "_0.obj")
+            objfn_1 = os.path.join(d, id + "_1.obj")
+            objfn_0_s = os.path.join(d, id + "_0_s.obj")
+            objfn_1_s = os.path.join(d, id + "_1_s.obj")
             mtlfn = objfn_0[:-5] + '0.mtl'
             daefn = objfn_0[:-5] + '0.dae'
             glbfn = daefn[:-4] + '.glb'
@@ -358,7 +376,8 @@ x = mesh(safe_interior, "safe.obj")
                 try:
                     r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
                     msgs = r.json()
-                    json.dump(msgs, open(os.path.join(d, "log.json"), "w"))
+                    json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
+                    utils.store_file(id + "_log", "json")
                 except: pass
                 
                 print(msgs)

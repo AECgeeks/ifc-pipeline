@@ -30,9 +30,17 @@ from random import SystemRandom
 choice = lambda seq: SystemRandom().choice(seq)
 letter_set = set(string.ascii_letters)
 
-STORAGE_DIR = os.environ.get("MODEL_DIR", tempfile.gettempdir())
-OUTPUT_DIR = os.environ.get("OUTPUT_DIR", STORAGE_DIR)
+from minio import Minio
 
+
+if os.environ.get("MINIO_HOST"):
+    STORAGE_DIR = tempfile.gettempdir()
+    OUTPUT_DIR = tempfile.gettempdir()
+else:
+    STORAGE_DIR = os.environ.get("MODEL_DIR", tempfile.gettempdir())
+    OUTPUT_DIR = os.environ.get("OUTPUT_DIR", STORAGE_DIR)
+    
+    
 def generate_id():
     return "".join(choice(string.ascii_letters) for i in range(32))
 
@@ -42,10 +50,37 @@ def storage_dir_for_id(id, output=False):
     return os.path.join([STORAGE_DIR, OUTPUT_DIR][output], id[0:1], id[0:2], id[0:3], id)
 
 
-def storage_file_for_id(id, ext, **kwargs):
+def storage_file_for_id(id, ext, ensure=True, **kwargs):
+    if ensure:
+        ensure_file(id, ext, **kwargs)
     return os.path.join(storage_dir_for_id(id, **kwargs), id + "." + ext)
+    
+    
+def ensure_file(id, ext, **kwargs):
+    if os.environ.get("MINIO_HOST"):
+        path = storage_file_for_id(id, ext, ensure=False, **kwargs)
+        if not os.path.exists(path):
+            if not os.path.exists(storage_dir_for_id(id)):
+                os.makedirs(storage_dir_for_id(id))
+            client = Minio(os.environ.get("MINIO_HOST"), "minioadmin", "minioadmin", secure=False)
+            if not client.bucket_exists("ifc-pipeline"):
+                client.make_bucket("ifc-pipeline")
+            print("ensure_file", id, ext)
+            try:
+                client.fget_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
+            except: pass
+            
+            
+def store_file(id, ext):
+    if os.environ.get("MINIO_HOST"):
+        path = storage_file_for_id(id, ext)
+        client = Minio(os.environ.get("MINIO_HOST"), "minioadmin", "minioadmin", secure=False)
+        if not client.bucket_exists("ifc-pipeline"):
+            client.make_bucket("ifc-pipeline")
+        client.fput_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
+        print("store", id, ext)
 
-
+            
 def validate_id(id):
     id_num = id.split("_")
     

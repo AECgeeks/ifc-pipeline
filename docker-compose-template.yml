@@ -18,6 +18,25 @@ services:
       
 {% endif %}
 
+{% if with_minio %}
+
+  minio:
+    image: minio/minio
+    volumes:
+      - ./docker-volumes/minio:/data
+    entrypoint:
+      - minio
+      - server
+      - /data
+    labels:
+      kompose.volume.size: 1Gi
+    volumes:
+      - ./docker-volumes/minio:/data
+    expose:
+      - "9000"
+
+{% endif %}
+
   redis:
     image: redis:5.0.7-alpine
     expose:
@@ -35,8 +54,12 @@ services:
       - -c
       - python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi
     environment:
+  {% if not with_minio %}
       - MODEL_DIR=/data
       - OUTPUT_DIR=/output
+  {% else %}
+      - MINIO_HOST=minio:9000
+  {% endif %}
       - REDIS_HOST=redis
       - POSTGRES_HOST={{ db_host or 'db' }}
       - POSTGRES_USER={{ db_user or 'postgres' }}
@@ -50,9 +73,11 @@ services:
   {% endif %}
     labels:
       kompose.volume.size: 1Gi
+  {% if not with_minio %}
     volumes:
       - ./models:/data
       - ./output:/output:ro
+  {% endif %}
       
   nginx:
     image: nginx:1.17-alpine
@@ -105,8 +130,12 @@ services:
       - supervisord
       - -n
     environment:
+  {% if not with_minio %}
       - MODEL_DIR=/data
       - OUTPUT_DIR=/output
+  {% else %}
+      - MINIO_HOST=minio:9000
+  {% endif %}
       - REDIS_HOST=redis
       - NUM_WORKERS=2
       - POSTGRES_HOST={{ db_host or 'db' }}
@@ -119,7 +148,8 @@ services:
   {% endif %}
     labels:
       kompose.volume.size: 1Gi
-    # readonly, need to add another volume still for output
+  {% if not with_minio %}
     volumes:
       - ./models:/data:ro
       - ./output:/output
+  {% endif %}
