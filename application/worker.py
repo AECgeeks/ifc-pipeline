@@ -130,7 +130,7 @@ class glb_optimize_task(task):
             pass
             
         utils.store_file(id, "glb")
-        utils.store_file(id, ".unoptimized.glb")
+        utils.store_file(id, "unoptimized.glb")
 
 
 class gzip_task(task):
@@ -291,6 +291,7 @@ def process(id, callback_url, **kwargs):
 def escape_routes(id, files, **kwargs):
 
         d = utils.storage_dir_for_id(id, output=True)
+        os.makedirs(d)
 
         if kwargs.get('development'):
             VOXEL_HOST = "http://localhost:5555"
@@ -406,14 +407,14 @@ x = mesh(safe_interior, "safe.obj")
             r = requests.get("%s/run/%s/unsafe.obj" % (VOXEL_HOST, vid))
             r.raise_for_status()
             with open(objfn_0, 'w') as f:
-                f.write('mtllib 0.mtl\n')
+                f.write('mtllib %s_0.mtl\n' % id)
                 f.write('usemtl red\n')
                 f.write(r.text)
                 
             r = requests.get("%s/run/%s/safe.obj" % (VOXEL_HOST, vid))
             r.raise_for_status()
             with open(objfn_1, 'w') as f:
-                f.write('mtllib 0.mtl\n')
+                f.write('mtllib %s_0.mtl\n' % id)
                 f.write('usemtl green\n')
                 f.write(r.text)
             
@@ -423,6 +424,8 @@ x = mesh(safe_interior, "safe.obj")
             subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", objfn_0_s, objfn_1_s, daefn])
             
             subprocess.check_call(["COLLADA2GLTF-bin", "-i", daefn, "-o", glbfn, "-b", "1"])
+            
+            utils.store_file(id + "_0", "glb")
             
         except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
             traceback.print_exc()

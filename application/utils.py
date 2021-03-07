@@ -57,8 +57,8 @@ def storage_file_for_id(id, ext, ensure=True, **kwargs):
     
     
 def ensure_file(id, ext, **kwargs):
+    path = storage_file_for_id(id, ext, ensure=False, **kwargs)
     if os.environ.get("MINIO_HOST"):
-        path = storage_file_for_id(id, ext, ensure=False, **kwargs)
         if not os.path.exists(path):
             if not os.path.exists(storage_dir_for_id(id)):
                 os.makedirs(storage_dir_for_id(id))
@@ -69,7 +69,7 @@ def ensure_file(id, ext, **kwargs):
             try:
                 client.fget_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
             except: pass
-            
+    return path        
             
 def store_file(id, ext):
     if os.environ.get("MINIO_HOST"):
