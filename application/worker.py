@@ -198,10 +198,10 @@ def do_process(id):
         os.makedirs(d)
 
     tasks = [
-        ifc_validation_task,
+        # ifc_validation_task,
         xml_generation_task,
         geometry_generation_task,
-        svg_generation_task,
+        # svg_generation_task,
         glb_optimize_task,
         gzip_task
     ]
@@ -209,8 +209,8 @@ def do_process(id):
     tasks_on_aggregate = []
     
     is_multiple = any("_" in n for n in input_files)
-    if is_multiple:
-        tasks.append(svg_rename_task)
+    # if is_multiple:
+    #     tasks.append(svg_rename_task)
     
     """
     # Create a file called task_print.py with the following
@@ -282,7 +282,8 @@ def process(id, callback_url, **kwargs):
         status = "success"
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
-        status = "failure"        
+        status = "failure"    
+        set_progress(id, -2)
 
     if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})
@@ -374,6 +375,7 @@ x = mesh(safe_interior, "safe.obj")
                 progress = r.json()
                 set_progress(id, progress)
                 
+                msgs = []
                 try:
                     r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
                     msgs = r.json()
@@ -382,10 +384,13 @@ x = mesh(safe_interior, "safe.obj")
                 except: pass
                 
                 # @todo this a typo scripted -> script
-                if len(msgs) and msgs[-1]['message'].startswith("scripted finished"):
-                    break
-                else:
-                    time.sleep(1.)
+                if len(msgs):
+                    if msgs[-1].get('message', '').startswith("scripted finished"):
+                        break
+                    elif msgs[-1].get('severity') == 'fatal':
+                        raise RuntimeError()
+                
+                time.sleep(1.)
             
             with open(mtlfn, 'w') as f:
                 f.write("newmtl red\n")
@@ -425,5 +430,88 @@ x = mesh(safe_interior, "safe.obj")
             
             utils.store_file(id + "_0", "glb")
             
-        except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
+        except:
             traceback.print_exc()
+            set_progress(id, -2)
+
+
+
+def calculate_volume(id, files, **kwargs):
+
+        d = utils.storage_dir_for_id(id, output=True)
+        os.makedirs(d)
+
+        if kwargs.get('development'):
+            VOXEL_HOST = "http://localhost:5555"
+        else:
+            VOXEL_HOST = "http://voxel:5000" 
+            
+        files = [utils.ensure_file(f, "ifc") for f in files]
+        files = [('ifc', (fn, open(fn))) for fn in files]
+        
+        command = """file = parse("*.ifc")
+all_surfaces = create_geometry(file)
+voxels = voxelize(all_surfaces)
+external = exterior(voxels)
+internal = invert(external)
+plane_surf = plane(internal, 0.0, 0.0, 1.0, 0.0)
+plane_voxels = voxelize(plane_surf)
+two_components = subtract(internal, plane_voxels)
+x = describe_components("components.json", two_components)
+y = json_stats("internal.json", {"internal"})
+"""
+
+        values = {'voxelfile': command}
+        try:
+            r = requests.post("%s/run" % VOXEL_HOST, files=files, data=values, headers={'accept':'application/json'})
+            vid = json.loads(r.text)['id']
+            
+            # @todo store in db
+            with open(os.path.join(d, "vid"), "w") as vidf:
+                vidf.write(vid)
+            
+            while True:
+                r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
+                progress = r.json()
+                set_progress(id, progress)
+                
+                msgs = []
+                try:
+                    r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
+                    msgs = r.json()
+                    json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
+                    utils.store_file(id + "_log", "json")
+                except: pass
+                
+                # @todo this a typo scripted -> script
+                if len(msgs):
+                    if msgs[-1].get('message', '').startswith("scripted finished"):
+                        break
+                    elif msgs[-1].get('severity') == 'fatal':
+                        raise RuntimeError()
+                
+                time.sleep(1.)
+
+            r = requests.get("%s/run/%s/components.json" % (VOXEL_HOST, vid))
+            r.raise_for_status()
+            components = json.loads(r.text)
+            
+            # @todo
+            # r = requests.get("%s/run/%s/internal.json" % (VOXEL_HOST, vid))
+            # r.raise_for_status()
+            
+            parse_bounds = lambda d: [tuple(map(float, s[1:-1].split(', '))) for s in d.get('world').split(' - ')]
+            get_z_min = lambda d: parse_bounds(d)[0][2]
+            to_volume = lambda c: c * 0.05**3
+            
+            counts = list(map(to_volume, map(float, map(operator.itemgetter('count'), sorted(components, key=get_z_min)))))
+            
+            with open(os.path.join(d, id + ".json"), 'w') as f:
+                json.dump({
+                    'under_ground': counts[0],
+                    'above_ground': counts[1]
+                }, f)
+            
+        except:
+            traceback.print_exc()
+            set_progress(id, -2)

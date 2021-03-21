@@ -43,9 +43,9 @@ def get_file_progress(id):
     if len(models) != 1:
         abort(404)
     p = models[0].progress
-    if p == -1:
+    if p in (-1, -2):
         return jsonify({
-            "status": "queued",
+            "status": ["queued", "errored"][p == -2],
             "id": id
         })
     elif p == 100:
@@ -61,7 +61,7 @@ def get_file_progress(id):
         })
    
 @application.route("/run/escape_routes", methods=['POST'])
-def initiate_check():
+def initiate_check_escape_routes():
     id = utils.generate_id()
     # d = utils.storage_dir_for_id(id, output=True)
     # os.makedirs(d)
@@ -79,6 +79,27 @@ def initiate_check():
         "id": id
     })
 
+
+@application.route("/run/calculate_volume", methods=['POST'])
+def initiate_calculate_volume():
+    id = utils.generate_id()
+    # d = utils.storage_dir_for_id(id, output=True)
+    # os.makedirs(d)
+    
+    files = request.json['ids']
+    
+    session = database.Session()
+    session.add(database.model(id, ''))
+    session.commit()
+    session.close()
+    
+    queue_task('calculate_volume', id, files)
+    return jsonify({
+        "status": "ok",
+        "id": id
+    })
+
+
 @application.route("/run/<id>/status", methods=['GET'])
 def get_check_progress(id):
     if not utils.validate_id(id):
@@ -92,11 +113,18 @@ def get_check_progress(id):
         abort(404)
         
     p = models[0].progress
-        
+    
     fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
-    if os.path.exists(fn):
+    fn2 = utils.storage_file_for_id(id, "json", output=True)
+    
+    if os.path.exists(fn) or os.path.exists(fn2):
         return jsonify({
             "status": "done",
+            "id": id
+        })
+    elif p in (-1, -2):
+        return jsonify({
+            "status": ["queued", "errored"][p == -2],
             "id": id
         })
     else:
@@ -119,13 +147,20 @@ def get_check_log(id):
 def get_check_results(id):
     if not utils.validate_id(id):
         abort(404)
+
     fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
-    if not os.path.exists(fn):
+    fn2 = utils.storage_file_for_id(id, "json", output=True)
+
+    if not os.path.exists(fn) and not os.path.exists(fn2):
         abort(409)
-    return jsonify({
-        "id": id,
-        "results": [{"visualization": "/run/%s/result/resource/gltf/0.glb" % id}]
-    })
+        
+    if os.path.exists(fn2):
+        return send_file(fn2)
+    else:    
+        return jsonify({
+            "id": id,
+            "results": [{"visualization": "/run/%s/result/resource/gltf/0.glb" % id}]
+        })
 
 @application.route("/run/<id>/result/resource/gltf/<i>.glb", methods=['GET'])
 def get_gltf(id, i):
