@@ -60,8 +60,11 @@ def get_file_progress(id):
             "id": id
         })
    
-@application.route("/run/escape_routes", methods=['POST'])
-def initiate_check_escape_routes():
+@application.route("/run/<check>", methods=['POST'])
+def initiate_check_escape_routes(check):
+    if check not in {'escape_routes', 'calculate_volume', 'space_heights'}:
+        abort(404)
+        
     id = utils.generate_id()
     # d = utils.storage_dir_for_id(id, output=True)
     # os.makedirs(d)
@@ -73,27 +76,7 @@ def initiate_check_escape_routes():
     session.commit()
     session.close()
     
-    queue_task('escape_routes', id, files)
-    return jsonify({
-        "status": "ok",
-        "id": id
-    })
-
-
-@application.route("/run/calculate_volume", methods=['POST'])
-def initiate_calculate_volume():
-    id = utils.generate_id()
-    # d = utils.storage_dir_for_id(id, output=True)
-    # os.makedirs(d)
-    
-    files = request.json['ids']
-    
-    session = database.Session()
-    session.add(database.model(id, ''))
-    session.commit()
-    session.close()
-    
-    queue_task('calculate_volume', id, files)
+    queue_task(check, id, files)
     return jsonify({
         "status": "ok",
         "id": id

@@ -35,6 +35,8 @@ import tempfile
 import operator
 import shutil
 
+from collections import defaultdict
+
 import requests
 
 on_windows = platform.system() == 'Windows'
@@ -515,3 +517,141 @@ y = json_stats("internal.json", {"internal"})
         except:
             traceback.print_exc()
             set_progress(id, -2)
+            
+
+def make_script_3_4(args):
+    basis = """file = parse("*.ifc")
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
+voxels = voxelize(all_surfaces)
+spaces = create_geometry(file, include={"IfcSpace"})
+space_ids = voxelize(spaces, type="uint", method="volume")
+space_voxels = voxelize(spaces, method="volume")
+headroom = subtract(space_voxels, voxels)
+headroom_height = collapse_count(headroom, 0, 0, -1)
+space_footprint = collapse(space_voxels, 0, 0, -1)
+space_footprint_offset = offset(space_footprint)
+space_footprint_thick = union(space_footprint, space_footprint_offset)
+space_footprint_thick_offset = offset(space_footprint_thick)
+space_footprint_thicker = union(space_footprint_thick, space_footprint_thick_offset)
+headroom_height_footprint = intersect(headroom_height, space_footprint_thicker)
+"""
+    
+    threshold = """headroom_height_footprint_%(n)d = greater_than(headroom_height_footprint, %(n)d)
+x = describe_group_by("data_%(n)d.json", headroom_height_footprint_%(n)d, space_ids)
+"""
+    
+    return ''.join((basis,) + tuple(threshold % {'n': t / 0.05} for t in args.get('thresholds', [])))
+
+
+def process_3_4(args, context):
+    import ifcopenshell
+    
+    space_guid_mapping = {}
+    for fn in context.files:
+        f = ifcopenshell.open(fn)
+        for sp in f.by_type("IfcSpace"):
+            space_guid_mapping[sp.id()] = sp.GlobalId
+    
+    d = defaultdict(list)
+    
+    for t in args.get('thresholds', []):
+        n = t / 0.05
+        for di in context.get_json("data_%(n)d.json" % locals()):
+            d[space_guid_mapping[int(di.get('id'))]].append(float(di.get('count')) * 0.05 ** 2)
+    
+    context.put_json(context.id + '.json', {
+        'space_heights': d,
+        'thresholds': args.get('thresholds', []),
+        'id': context.id
+    })
+
+
+class voxel_execution_context:
+    def __init__(self, id, vid, files,  **kwargs):
+    
+        self.id = id
+        self.vid = vid
+        self.files = files
+        self.path = utils.storage_dir_for_id(id, output=True)
+    
+        if kwargs.get('development'):
+            self.host = "http://localhost:5555"
+        else:
+            self.host = "http://voxel:5000"
+        
+    def get_file(self, path):
+        r = requests.get("%s/run/%s/%s" % (self.host, self.vid, path))
+        r.raise_for_status()
+        return r
+        
+    def get_json(self, path):
+        return self.get_file(path).json()
+    
+    def put_json(self, path, obj):
+        with open(os.path.join(self.path, path), 'w') as f:
+            json.dump(obj, f)
+    
+
+def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
+
+    d = utils.storage_dir_for_id(id, output=True)
+    os.makedirs(d)
+
+    if kwargs.get('development'):
+        VOXEL_HOST = "http://localhost:5555"
+    else:
+        VOXEL_HOST = "http://voxel:5000" 
+        
+    files = [utils.ensure_file(f, "ifc") for f in files]
+    file_objs = [('ifc', (fn, open(fn))) for fn in files]
+    
+    command = script_fn(args)
+    values = {'voxelfile': command}    
+    
+    try:
+        r = requests.post("%s/run" % VOXEL_HOST, files=file_objs, data=values, headers={'accept':'application/json'})
+        vid = json.loads(r.text)['id']
+        
+        context = voxel_execution_context(id, vid, files, **kwargs)
+        
+        # @todo store in db
+        with open(os.path.join(d, "vid"), "w") as vidf:
+            vidf.write(vid)
+        
+        while True:
+            r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
+            progress = r.json()
+            set_progress(id, progress)
+            
+            msgs = []
+            try:
+                r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
+                msgs = r.json()
+                json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
+                utils.store_file(id + "_log", "json")
+            except: pass
+            
+            # @todo this a typo scripted -> script
+            if len(msgs):
+                if msgs[-1].get('message', '').startswith("scripted finished"):
+                    break
+                elif msgs[-1].get('severity') == 'fatal':
+                    raise RuntimeError()
+            
+            time.sleep(1.)
+            
+        process_fn(args, context)
+        
+    except:
+        traceback.print_exc()
+        set_progress(id, -2)
+
+
+def space_heights(id, files, **kwargs):
+    process_voxel_check(
+        make_script_3_4,
+        process_3_4,
+        {'thresholds': [1.6,1.8,2.0,2.1,2.2,2.3]},
+        id,
+        files,
+        **kwargs)
