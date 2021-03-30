@@ -117,7 +117,7 @@ if args.convert:
     except: pass
     
     preset = {
-        'Chart.yaml.name': 'IFC-pipeline-vx',
+        'Chart.yaml.name': 'ifc-pipeline-vx',
         'Chart.yaml.description': 'IFC-pipeline with voxelization',
     }
     
