@@ -49,6 +49,7 @@ if args.convert:
         './docker-volumes/certbot/conf' : 'emptyDir',
         './docker-volumes/certbot/www'  : 'emptyDir',
         './docker-volumes/redis'        : 'emptyDir',
+        './docker-volumes/nginx/log'    : 'emptyDir',
         './docker-volumes/db'           : 'persistentVolumeClaim',
         './docker-volumes/minio'        : 'persistentVolumeClaim',
         './models'                      : 'persistentVolumeClaim',
