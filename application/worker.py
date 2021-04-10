@@ -291,7 +291,7 @@ def process(id, callback_url, **kwargs):
         r = requests.post(callback_url, data={"status": status, "id": id})
 
 
-def escape_routes(id, files, **kwargs):
+def escape_routes(id, config, **kwargs):
 
         d = utils.storage_dir_for_id(id, output=True)
         os.makedirs(d)
@@ -303,7 +303,7 @@ def escape_routes(id, files, **kwargs):
             
         ESCAPE_ROUTE_LENGTH = 8.0
         
-        files = [utils.ensure_file(f, "ifc") for f in files]
+        files = [utils.ensure_file(f, "ifc") for f in config['ids']]
         files = [('ifc', (fn, open(fn))) for fn in files]
 
         command = """file = parse("*.ifc")
@@ -438,7 +438,7 @@ x = mesh(safe_interior, "safe.obj")
 
 
 
-def calculate_volume(id, files, **kwargs):
+def calculate_volume(id, config, **kwargs):
 
         d = utils.storage_dir_for_id(id, output=True)
         os.makedirs(d)
@@ -448,7 +448,7 @@ def calculate_volume(id, files, **kwargs):
         else:
             VOXEL_HOST = "http://voxel:5000" 
             
-        files = [utils.ensure_file(f, "ifc") for f in files]
+        files = [utils.ensure_file(f, "ifc") for f in config['ids']]
         files = [('ifc', (fn, open(fn))) for fn in files]
         
         command = """file = parse("*.ifc")
@@ -564,7 +564,107 @@ def process_3_4(args, context):
         'thresholds': args.get('thresholds', []),
         'id': context.id
     })
+    
+def make_script_3_26(args):
+    h = args['height']
+    h = int(h / 0.05)
+    
+    basis = """file = parse("*.ifc")
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
+voxels = voxelize(all_surfaces)
+stairs = create_geometry(file, include={"IfcStair"})
+stair_ids_region = voxelize(stairs, type="uint", method="surface")
+stair_ids_empty = constant_like(voxels, 0, type="uint")
+stair_ids = union(stair_ids_region, stair_ids_empty)
+stair_ids_offset = shift(stair_ids, dx=0, dy=0, dz=1)
+x = mesh(stair_ids_offset, "stair_ids_offset.obj")
+railings = create_geometry(file, include={"IfcRailing"})
+stair_voxels_region = voxelize(stairs)
+stair_voxels_empty = constant_like(voxels, 0)
+stair_voxels = union(stair_voxels_region, stair_voxels_empty)
+railing_voxels_orig = voxelize(railings)
+railing_voxels_down = sweep(railing_voxels_orig, dx=0.0, dy=0.0, dz=-1.0)
+stair_voxels_wo_railing = subtract(stair_voxels, railing_voxels_orig)
+stair_offset = shift(stair_voxels_wo_railing, dx=0, dy=0, dz=1)
+stair_offset_min_1 = subtract(stair_offset, stair_voxels_wo_railing)
+stair_offset_min = subtract(stair_offset_min_1, railing_voxels_down)
+extrusion = sweep(stair_voxels_wo_railing, dx=0.0, dy=0.0, dz=-0.3)
+stair_top = subtract(stair_offset_min, extrusion)
+space = sweep(stair_top, dx=0, dy=0, dz=1, until=voxels)
+cnt = collapse_count(space, dx=0, dy=0, dz=-1)
+valid = greater_than(cnt, %d)
+invalid = less_than(cnt, %d)
+x = mesh(valid, "valid.obj", groups=stair_ids_offset)
+x = mesh(invalid, "invalid.obj", groups=stair_ids_offset)
+""" % (h, h + 1)
 
+    return basis
+
+def process_3_26(args, context):
+    import ifcopenshell
+    
+    stair_guid_mapping = {}
+    for fn in context.files:
+        f = ifcopenshell.open(fn)
+        for st in f.by_type("IfcStair"):
+            stair_guid_mapping[st.id()] = st.GlobalId
+            
+            for rel in st.IsDecomposedBy:
+                for ch in rel.RelatedObjects:
+                    stair_guid_mapping[ch.id()] = st.GlobalId
+    
+    d = os.path.join(context.path, 'tmp')
+    os.makedirs(d)
+    
+    context.get_file('valid.obj', target=os.path.join(d, 'valid.obj'))
+    context.get_file('invalid.obj', target=os.path.join(d, 'invalid.obj'))
+    
+    with open(os.path.join(d, 'colours.mtl'), 'w') as f:
+        f.write("newmtl red\n")
+        f.write("Kd 1.0 0.0 0.0\n\n")
+        f.write("newmtl green\n")
+        f.write("Kd 0.0 1.0 0.0\n\n")
+        
+    def simplify():
+        for fn in glob.glob(os.path.join(d, "*.obj")):
+            fn2 = fn[:-4] + "_s.obj"
+            subprocess.check_call([sys.executable, "simplify_obj.py", fn, fn2])
+            
+            with open(fn2, 'r+') as f:
+                ls = f.readlines()
+                ls.insert(0, "mtllib colours.mtl\n")
+                if "invalid" in fn:
+                    ls.insert(1, "usemtl red\n")
+                else:
+                    ls.insert(1, "usemtl green\n")
+                f.seek(0)
+                f.writelines(ls)
+            
+            yield fn2
+        
+    subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--", *simplify(), os.path.join(d, "%s.dae")])
+            
+    def convert():
+        for i, fn in enumerate(glob.glob(os.path.join(d, "*.dae"))):
+            error = "red" in open(fn).read()
+            id = int(os.path.basename(fn)[:-4])
+            fn2 = "../" + context.id + "_%d" % i + ".glb"
+            subprocess.check_call(["COLLADA2GLTF-bin", "-i", fn, "-o", fn2, "-b", "1"], cwd=d)
+            utils.store_file(context.id + "_%d" % i, "glb")
+            yield i, error, stair_guid_mapping[id]
+            
+    def create_issue(tup):
+        i, is_error, g = tup
+        return {
+            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (context.id, i),
+            "status": ["NOTICE", "ERROR"][is_error],
+            "guid": g
+        }
+        
+    context.put_json(context.id + '.json', {
+        'id': context.id,
+        'results': list(map(create_issue, convert()))
+    })
 
 class voxel_execution_context:
     def __init__(self, id, vid, files,  **kwargs):
@@ -579,10 +679,14 @@ class voxel_execution_context:
         else:
             self.host = "http://voxel:5000"
         
-    def get_file(self, path):
+    def get_file(self, path, target=None):
         r = requests.get("%s/run/%s/%s" % (self.host, self.vid, path))
         r.raise_for_status()
-        return r
+        if target:
+            with open(target, 'wb') as f:
+                f.write(r.content)
+        else:
+            return r
         
     def get_json(self, path):
         return self.get_file(path).json()
@@ -647,11 +751,37 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
         set_progress(id, -2)
 
 
-def space_heights(id, files, **kwargs):
+def space_heights(id, config, **kwargs):
+    thresholds = config.get(
+        'thresholds',
+        [0.0,1.6,1.8,2.0,2.1,2.2,2.3]
+    )
+    
+    try:
+        thresholds = list(map(float, thresholds))
+    except:
+        abort(400)
+        
     process_voxel_check(
         make_script_3_4,
         process_3_4,
-        {'thresholds': [1.6,1.8,2.0,2.1,2.2,2.3]},
+        {'thresholds': thresholds},
         id,
-        files,
+        config['ids'],
+        **kwargs)
+
+def stair_headroom(id, config, **kwargs):
+    height = config.get('height', 2.2)
+    
+    try:
+        height = float(height)
+    except:
+        abort(400)
+        
+    process_voxel_check(
+        make_script_3_26,
+        process_3_26,
+        {'height': height},
+        id,
+        config['ids'],
         **kwargs)

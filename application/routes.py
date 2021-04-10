@@ -62,21 +62,21 @@ def get_file_progress(id):
    
 @application.route("/run/<check>", methods=['POST'])
 def initiate_check_escape_routes(check):
-    if check not in {'escape_routes', 'calculate_volume', 'space_heights'}:
+    if check not in {'escape_routes', 'calculate_volume', 'space_heights', 'stair_headroom'}:
         abort(404)
         
     id = utils.generate_id()
     # d = utils.storage_dir_for_id(id, output=True)
     # os.makedirs(d)
     
-    files = request.json['ids']
+    config = request.json
     
     session = database.Session()
     session.add(database.model(id, ''))
     session.commit()
     session.close()
     
-    queue_task(check, id, files)
+    queue_task(check, id, config)
     return jsonify({
         "status": "ok",
         "id": id
@@ -145,11 +145,10 @@ def get_check_results(id):
             "results": [{"visualization": "/run/%s/result/resource/gltf/0.glb" % id}]
         })
 
-@application.route("/run/<id>/result/resource/gltf/<i>.glb", methods=['GET'])
+@application.route("/run/<id>/result/resource/gltf/<int:i>.glb", methods=['GET'])
 def get_gltf(id, i):
-    if i != "0":
-        abort(404)
-    fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
+    fn = utils.storage_file_for_id(id + "_%d" % i, "glb", output=True)
+    print(fn)
     if not os.path.exists(fn):
         abort(404)
     return send_file(fn)

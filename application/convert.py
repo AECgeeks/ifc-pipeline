@@ -1,12 +1,30 @@
-# blender -b -P dae_convert.py -- <obj_file.obj>
+# blender -b -P dae_convert.py [--split] -- <obj_file.obj>
 
 import sys
 import bpy
 
-assert sys.argv[4] == '--'
+assert '--' in sys.argv
+sep = sys.argv.index('--')
+split = '--split' in sys.argv
 
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
-for fn in sys.argv[5:-1]:
-    bpy.ops.import_scene.obj(filepath=fn, axis_forward='Y', axis_up='Z')
-bpy.ops.wm.collada_export(filepath=sys.argv[-1])
+
+for fn in sys.argv[sep + 1:-1]:
+    bpy.ops.import_scene.obj(filepath=fn, axis_forward='Y', axis_up='Z', use_split_groups=True)
+
+if split:
+    for ob in bpy.data.objects:
+        print(ob.name)
+    get_id = lambda nm: nm.split('.')[0].split('-')[1]
+    for id in {get_id(ob.name) for ob in bpy.data.objects}:
+        for ob in bpy.data.objects:
+            if hasattr(ob, 'select'):
+                ob.select = get_id(ob.name) == id
+            else:
+                ob.select_set(get_id(ob.name) == id)
+        bpy.ops.wm.collada_export(filepath=sys.argv[-1] % id, selected=True)
+else:
+    bpy.ops.wm.collada_export(filepath=sys.argv[-1])
+
+exit()

@@ -82,7 +82,7 @@ if not DEVELOPMENT:
     from rq import Queue
     
     redis_conn = Redis(host=os.environ.get("REDIS_HOST", "localhost"))
-    q = Queue(connection=redis_conn, default_timeout=3600)
+    q = Queue(connection=redis_conn, default_timeout=36000)
 
 
 @application.route('/', methods=['GET'])
