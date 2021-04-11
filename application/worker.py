@@ -666,6 +666,47 @@ def process_3_26(args, context):
         'results': list(map(create_issue, convert()))
     })
 
+def make_script_3_31(args):
+    return """file = parse("*.ifc")
+surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+slabs = create_geometry(file, include={"IfcSlab"})
+doors = create_geometry(file, include={"IfcDoor"})
+surface_voxels = voxelize(surfaces)
+slab_voxels = voxelize(slabs)
+door_voxels = voxelize(doors)
+walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
+walkable_minus = subtract(walkable, slab_voxels)
+walkable_seed = intersect(door_voxels, walkable_minus)
+surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
+surfaces_padded = offset_xy(surface_voxels, 0.1)
+surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
+walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
+walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+reachable = traverse(walkable_region, walkable_seed_real)
+reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
+reachable_bottom = subtract(reachable, reachable_shifted)
+all_surfaces = create_geometry(file)
+voxels = voxelize(all_surfaces)
+external = exterior(voxels)
+walkable_region_offset = offset_xy(walkable_region, 1)
+walkable_region_incl = union(walkable_region, walkable_region_offset)
+seed = intersect(walkable_region_incl, external)
+flow = traverse(walkable_region_incl, seed, connectedness=26, type="uint")
+empty = constant_like(flow, 0, type="bit")
+door_mask = traverse(empty, door_voxels, depth=0.5, connectedness=26)
+flow_masked = intersect(flow, door_mask)
+x = export_csv(flow_masked, "flow.csv")
+"""
+
+def process_3_31(args, context):
+    context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
+    subprocess.check_call([
+        sys.executable,
+        os.path.join(os.path.dirname(__file__), 'process_3_31.py'),
+        context.id,
+        repr(context.files)
+    ], cwd=context.path)
+
 class voxel_execution_context:
     def __init__(self, id, vid, files,  **kwargs):
     
@@ -782,6 +823,15 @@ def stair_headroom(id, config, **kwargs):
         make_script_3_26,
         process_3_26,
         {'height': height},
+        id,
+        config['ids'],
+        **kwargs)
+
+def door_direction(id, config, **kwargs):
+    process_voxel_check(
+        make_script_3_31,
+        process_3_31,
+        {},
         id,
         config['ids'],
         **kwargs)

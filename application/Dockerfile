@@ -4,7 +4,7 @@ WORKDIR /
 RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel supervisor
 RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install blender build-essential cmake
 RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install git
-RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz
+RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz matplotlib scipy
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
 ## 3D output conversion: Move to voxel?
@@ -14,10 +14,10 @@ RUN cmake .. && make install
 RUN mv COLLADA2GLTF-bin /usr/local/bin
 
 # IfcConvert v0.6.0
-RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.6.0-c15fdc7-linux64.zip -O /tmp/IfcConvert.zip
+RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.6.0-ff7219b-linux64.zip -O /tmp/IfcConvert.zip
 RUN unzip /tmp/IfcConvert.zip -d /usr/bin
 
-RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.6.0-c15fdc7-linux64.zip
+RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.6.0-ff7219b-linux64.zip
 RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
