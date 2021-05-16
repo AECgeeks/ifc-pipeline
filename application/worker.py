@@ -385,9 +385,8 @@ x = mesh(safe_interior, "safe.obj")
                     utils.store_file(id + "_log", "json")
                 except: pass
                 
-                # @todo this a typo scripted -> script
                 if len(msgs):
-                    if msgs[-1].get('message', '').startswith("scripted finished"):
+                    if msgs[-1].get('message', '').startswith("script finished"):
                         break
                     elif msgs[-1].get('severity') == 'fatal':
                         raise RuntimeError()
@@ -485,9 +484,8 @@ y = json_stats("internal.json", {"internal"})
                     utils.store_file(id + "_log", "json")
                 except: pass
                 
-                # @todo this a typo scripted -> script
                 if len(msgs):
-                    if msgs[-1].get('message', '').startswith("scripted finished"):
+                    if msgs[-1].get('message', '').startswith("script finished"):
                         break
                     elif msgs[-1].get('severity') == 'fatal':
                         raise RuntimeError()
@@ -776,9 +774,8 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
                 utils.store_file(id + "_log", "json")
             except: pass
             
-            # @todo this a typo scripted -> script
             if len(msgs):
-                if msgs[-1].get('message', '').startswith("scripted finished"):
+                if msgs[-1].get('message', '').startswith("script finished"):
                     break
                 elif msgs[-1].get('severity') == 'fatal':
                     raise RuntimeError()
