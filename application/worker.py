@@ -769,7 +769,7 @@ def process_3_31(args, context):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
     subprocess.check_call([
         sys.executable,
-        os.path.join(os.path.dirname(__file__), 'process_3_31.py'),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), 'process_3_31.py')),
         context.id,
         repr(context.files)
     ], cwd=context.path)
@@ -806,6 +806,8 @@ class voxel_execution_context:
 
 def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
 
+    from multiprocessing import cpu_count
+
     d = utils.storage_dir_for_id(id, output=True)
     os.makedirs(d)
 
@@ -818,10 +820,14 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
     file_objs = [('ifc', (fn, open(fn))) for fn in files]
     
     command = script_fn(args)
-    values = {'voxelfile': command}    
+    values = {
+        'voxelfile': command,
+        'threads': cpu_count() // int(os.environ.get('NUM_WORKERS', '1')),
+        'chunk': 16
+    }
     
     try:
-        r = requests.post("%s/run" % VOXEL_HOST, files=file_objs, data=values, headers={'accept':'application/json'})
+        r = requests.post("%s/run" % VOXEL_HOST, files=file_objs, data=values, headers={'accept': 'application/json'})
         vid = json.loads(r.text)['id']
         
         context = voxel_execution_context(id, vid, files, **kwargs)
@@ -832,7 +838,7 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
         
         while True:
             r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
-            progress = r.json()
+            progress = int(r.json() / 100. * 95.)
             set_progress(id, progress)
             
             msgs = []
@@ -853,8 +859,10 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
             
         process_fn(args, context)
         
+        set_progress(id, 100)
+        
     except:
-        traceback.print_exc()
+        traceback.print_exc(file=sys.stdout)
         set_progress(id, -2)
 
 
