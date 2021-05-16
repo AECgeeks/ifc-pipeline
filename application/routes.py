@@ -145,8 +145,15 @@ def get_check_results(id):
             "results": [{"visualization": "/run/%s/result/resource/gltf/0.glb" % id}]
         })
 
-@application.route("/run/<id>/result/resource/gltf/<int:i>.glb", methods=['GET'])
+@application.route("/run/<id>/result/resource/gltf/<i>.glb", methods=['GET'])
 def get_gltf(id, i):
+    try:
+        i = int(i)
+    except:
+        import traceback
+        traceback.print_exc()
+        abort(404)
+    
     fn = utils.storage_file_for_id(id + "_%d" % i, "glb", output=True)
     print(fn)
     if not os.path.exists(fn):
