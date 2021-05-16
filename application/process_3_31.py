@@ -75,7 +75,7 @@ class ifc_element:
             self.center + Mi[1] * 0.2
         ]
     
-    def draw(self, use_2d=True, color='black'):
+    def draw(self, ax, use_2d=True, color='black'):
         es = self.geom.geometry.edges
         vs = self.VV
         
@@ -97,9 +97,9 @@ class ifc_element:
         es = numpy.array(es).reshape((-1, 2))
         
         for ab in list(vs[:,0:2][es]):
-            plt.plot(ab.T[0], ab.T[1], color=color, lw=0.5)
+            ax.plot(ab.T[0], ab.T[1], color=color, lw=0.5)
             
-    def draw_arrow(self):
+    def draw_arrow(self, ax):
         st, en = self.pts
         en = en - st
         
@@ -109,7 +109,7 @@ class ifc_element:
             False: 'r'
         }[self.valid]
             
-        plt.arrow(
+        ax.arrow(
             st[0], st[1], en[0], en[1],
             color=clr, head_width=0.15, head_length=0.2,
             length_includes_head=True
@@ -141,7 +141,7 @@ class ifc_element:
             ( 0.25,  0.0)
         ))
         indices = numpy.array(((0,1,3),(1,2,3)))
-        coords /= 20
+        coords /= (1. / spacing) * 2
         for xy, s, c in zip(samples.T[0:2].T, ss, cs):
             M = (c, -s), (s, c)
             for v in coords:
@@ -185,13 +185,15 @@ wall_objs = list(map(ifc_element, walls, wall_shapes))
 flow = numpy.genfromtxt('flow.csv', delimiter=',')
 flow = flow[flow[:,3] != 1.]
 
+spacing = min(numpy.diff(sorted(set(flow.T[0]))))
+
 def get_slice(data, min_z, max_z):
     data = data[data[:,2] >= min_z]
     data = data[data[:,2] < max_z]
     return data
 
-def get_mean(data, spacing=10):
-    ints = numpy.int_(data * spacing)
+def get_mean(data):
+    ints = numpy.int_(data / spacing)
     mi = ints.min(axis=0)
     ma = ints.max(axis=0)
     sz = (ma - mi)[0:2] + 1
@@ -203,8 +205,8 @@ def get_mean(data, spacing=10):
         counts[i,j] += 1
     arr[counts > 0] /= counts[counts > 0]
     
-    x = (numpy.arange(sz[0]) + mi[0]) / spacing
-    y = (numpy.arange(sz[1]) + mi[1]) / spacing
+    x = (numpy.arange(sz[0]) + mi[0]) * spacing
+    y = (numpy.arange(sz[1]) + mi[1]) * spacing
     
     xs, ys = numpy.meshgrid(y, x)
     
@@ -216,9 +218,8 @@ def get_mean(data, spacing=10):
 
 tree = KDTree(flow[:, 0:3])
 
-plt.figure(figsize=(8,12))
 
-norm = matplotlib.colors.Normalize(vmin=flow.T[3].min() / 10., vmax=flow.T[3].max() / 10.)
+norm = matplotlib.colors.Normalize(vmin=flow.T[3].min() * spacing, vmax=flow.T[3].max() * spacing)
 
 results = []
 
@@ -226,24 +227,28 @@ result_mapping = {}
 
 for i, (mi, ma) in enumerate(elev_pairs):
 
-    plt.clf()
     
     flow_mi_ma = get_slice(flow, mi - 1, ma)
     
-    # plt.scatter(flow_mi_ma.T[0], flow_mi_ma.T[1], marker='s', s=1, norm=norm, c=(flow_mi_ma.T[3] -1.) / 10., label='distance from exterior')
-    plt.gca().set_aspect('equal')
-    plt.xlabel('x')
-    plt.ylabel('y')
-    # plt.colorbar(fraction=0.04)
-    
+    figures = [plt.figure(figsize=(8,12)) for x_ in range(2)]
+    axes = [f.add_subplot(111) for f in figures]
+       
+    for idx, (fig, ax) in enumerate(zip(figures, axes)):
+        ax.set_aspect('equal')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        if idx == 0:
+            sc = ax.scatter(flow_mi_ma.T[0], flow_mi_ma.T[1], marker='s', s=1, norm=norm, c=(flow_mi_ma.T[3] -1.) * spacing, label='distance from exterior')
+            # fig.colorbar(sc, fraction=0.04, cax=ax)
+        
     x_y_angle = None
     
     if flow_mi_ma.size:
         x, y, arr = get_mean(flow_mi_ma)
         
-        dx, dy = numpy.gradient(arr, 1. / 10)
+        dx, dy = numpy.gradient(arr, spacing)
         lens = numpy.sqrt(dx.data ** 2 + dy.data ** 2)
-        too_long = lens > 120
+        # too_long = lens > 120
         dx /= lens
         dy /= lens
         
@@ -263,19 +268,22 @@ for i, (mi, ma) in enumerate(elev_pairs):
             af
         ))
               
-        # plt.quiver(y, x, -dx, -dy, scale=200,
-        #     headwidth=3/1.5,
-        #     headlength=5/3,
-        #     headaxislength=4.5/3)
+        axes[1].quiver(y, x, -dx, -dy, scale=200,
+                       headwidth=3/1.5,
+                       headlength=5/3,
+                       headaxislength=4.5/3)
     
     for ob in objs:
         Z = ob.M[2,3] + 1.
         if Z < mi or Z > ma:
             continue
             
-        ob.draw()
+        for ax in axes:
+            ob.draw(ax)
         ob.validate(tree, flow[:, 3])
-        ob.draw_arrow()
+        for ax in axes:
+            ob.draw_arrow(ax)
+
         if ob in result_mapping:
             print("Warning element already emitted")
         else:
@@ -290,9 +298,11 @@ for i, (mi, ma) in enumerate(elev_pairs):
         if Z < mi or Z > ma:
             continue       
     
-        ob.draw(use_2d=False, color='gray')
+        for ax in axes:
+            ob.draw(ax, use_2d=False, color='gray')
     
-    plt.savefig("flow-%d.png" % i, dpi=600)
+    for idx, fig in enumerate(figures):
+        fig.savefig("flow-%d-%d.png" % (idx, i), dpi=600)
 
 
 for ob in objs:
