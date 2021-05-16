@@ -128,7 +128,7 @@ class ifc_element:
         print('mtllib mtl.mtl\n', file=obj)
         print('usemtl %s\n' % clr, file=obj)
     
-        z = self.center[2] + 0.5
+        z = self.center[2] + 0.05
         dists = numpy.linalg.norm(xya[:,0:2] - self.center[0:2], axis=1)
         samples = xya[dists < 1]
         ss = numpy.sin(samples.T[2])
@@ -142,6 +142,7 @@ class ifc_element:
         ))
         indices = numpy.array(((0,1,3),(1,2,3)))
         coords /= (1. / spacing) * 2
+        coords *= 4
         for xy, s, c in zip(samples.T[0:2].T, ss, cs):
             M = (c, -s), (s, c)
             for v in coords:
@@ -247,6 +248,13 @@ for i, (mi, ma) in enumerate(elev_pairs):
         x, y, arr = get_mean(flow_mi_ma)
         
         dx, dy = numpy.gradient(arr, spacing)
+        
+        x = x[::4, ::4]
+        y = y[::4, ::4]
+        arr = arr[::4, ::4]
+        dx = dx[::4, ::4]
+        dy = dy[::4, ::4]
+        
         lens = numpy.sqrt(dx.data ** 2 + dy.data ** 2)
         # too_long = lens > 120
         dx /= lens
