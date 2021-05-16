@@ -18,8 +18,14 @@ require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewe
     
     if (window.CHECK_ID) {    
         var loader = new THREE.GLTFLoader();
-        loader.load(`/run/${window.CHECK_ID}/result/resource/gltf/0.glb`, function(gltf) {
-            v.bimSurfer3D.viewer.scene.add(gltf.scene);
+        fetch(`/run/${window.CHECK_ID}/result`).then(r => r.json()).then(data => {
+            data.results.forEach(r => {
+                if (r.visualization) {
+                    loader.load(r.visualization, function(gltf) {
+                        v.bimSurfer3D.viewer.scene.add(gltf.scene);
+                    });
+                }
+            });
         });
     }
 });
