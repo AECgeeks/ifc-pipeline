@@ -567,7 +567,7 @@ def make_script_3_26(args):
     h = args['height']
     h = int(h / 0.05)
     
-    basis = """file = parse("*.ifc")
+    basis_old = """file = parse("*.ifc")
 all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
 voxels = voxelize(all_surfaces)
 stairs = create_geometry(file, include={"IfcStair"})
@@ -594,6 +594,68 @@ valid = greater_than(cnt, %d)
 invalid = less_than(cnt, %d)
 x = mesh(valid, "valid.obj", groups=stair_ids_offset)
 x = mesh(invalid, "invalid.obj", groups=stair_ids_offset)
+""" % (h, h + 1)
+
+    basis = """function get_reachability(file)
+
+    surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+    surface_voxels = voxelize(surfaces)
+
+    slabs = create_geometry(file, include={"IfcSlab"})
+    slab_voxels = voxelize(slabs)
+
+    doors = create_geometry(file, include={"IfcDoor"})
+    door_voxels = voxelize(doors)
+
+    walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
+    walkable_minus = subtract(walkable, slab_voxels)
+    walkable_seed = intersect(door_voxels, walkable_minus)
+
+    surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
+    surfaces_padded = offset_xy(surface_voxels, 0.1)
+    surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
+    walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
+    walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+    reachable = traverse(walkable_region, walkable_seed_real)
+
+return reachable
+
+file = parse("*.ifc")
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
+voxels = voxelize(all_surfaces)
+
+stairs = create_geometry(file, include={"IfcStair"})
+stair_ids_region = voxelize(stairs, type="uint", method="surface")
+stair_ids_empty = constant_like(voxels, 0, type="uint")
+stair_ids = union(stair_ids_region, stair_ids_empty)
+stair_ids_offset = shift(stair_ids, dx=0, dy=0, dz=1)
+
+stair_voxels_region = voxelize(stairs)
+stair_voxels_empty = constant_like(voxels, 0)
+stair_voxels = union(stair_voxels_region, stair_voxels_empty)
+
+railings = create_geometry(file, include={"IfcRailing"})
+railing_voxels_orig = voxelize(railings)
+railing_voxels_down = sweep(railing_voxels_orig, dx=0.0, dy=0.0, dz=-1.0)
+stair_voxels_wo_railing = subtract(stair_voxels, railing_voxels_orig)
+
+stair_offset = shift(stair_voxels_wo_railing, dx=0, dy=0, dz=1)
+stair_offset_min_1 = subtract(stair_offset, stair_voxels_wo_railing)
+stair_offset_min = subtract(stair_offset_min_1, railing_voxels_down)
+extrusion = sweep(stair_voxels_wo_railing, dx=0.0, dy=0.0, dz=-0.4)
+stair_top = subtract(stair_offset_min, extrusion)
+
+reachable = get_reachability(file)
+stair_top_reachable = intersect(stair_top, reachable)
+
+space = sweep(stair_top_reachable, dx=0, dy=0, dz=1, until=voxels)
+cnt = collapse_count(space, dx=0, dy=0, dz=-1)
+
+valid = greater_than(cnt, %d)
+invalid = less_than(cnt, %d)
+
+mesh(valid, "valid.obj", groups=stair_ids_offset)
+mesh(invalid, "invalid.obj", groups=stair_ids_offset)
 """ % (h, h + 1)
 
     return basis
