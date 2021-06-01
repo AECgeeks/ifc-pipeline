@@ -16,8 +16,13 @@ for fn in sys.argv[sep + 1:-1]:
 if split:
     for ob in bpy.data.objects:
         print(ob.name)
-    get_id = lambda nm: nm.split('.')[0].split('-')[1]
+    get_id = lambda nm: nm.split('.')[0].split('-')[-1]
     for id in {get_id(ob.name) for ob in bpy.data.objects}:
+        try:
+            int(id)
+        except:
+            continue
+
         for ob in bpy.data.objects:
             if hasattr(ob, 'select'):
                 ob.select = get_id(ob.name) == id
