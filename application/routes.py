@@ -22,10 +22,10 @@ def accept_file_gzip():
     
     def process(fn):
         with open(fn, 'wb') as f:
-            print(gz.tell(), f.tell())
-            print("copying data")
-            shutil.copyfileobj(gz, f)
-            print(gz.tell(), f.tell())
+            try:
+                shutil.copyfileobj(gz, f)
+            except OSError:
+                abort(400)
     
     id = process_upload(process)
     return jsonify({
