@@ -251,7 +251,7 @@ def get_viewer(id, cid=None):
     #     return render_template('error.html', id=id)
 
     # for ifc_fn in ifc_files:
-    glbfn = utils.storage_file_for_id(id, "glb")
+    glbfn = utils.storage_file_for_id(id, "glb", output=True)
     if not os.path.exists(glbfn):
         abort(404)
             
