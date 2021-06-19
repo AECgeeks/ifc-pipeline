@@ -40,13 +40,13 @@ fns = ast.literal_eval(fns)
 settings = ifcopenshell.geom.settings(
     USE_WORLD_COORDS=False
 )
-create_shape = functools.partial(ifcopenshell.geom.create_shape, settings)
+create_shape = functools.partial(wrap_try(ifcopenshell.geom.create_shape), settings)
 
 settings_2d = ifcopenshell.geom.settings(
     INCLUDE_CURVES=True,
     EXCLUDE_SOLIDS_AND_SURFACES=True
 )
-create_shape_2d = functools.partial(ifcopenshell.geom.create_shape, settings_2d)
+create_shape_2d = functools.partial(wrap_try(ifcopenshell.geom.create_shape), settings_2d)
 
 with open("mtl.mtl", 'w') as f:
     f.write("newmtl red\n")
@@ -63,6 +63,9 @@ class ifc_element:
         self.inst = inst
         self.geom = geom
         
+        if self.geom is None:
+            return
+            
         v = self.geom.geometry.verts
         d = self.geom.transformation.matrix.data
         
@@ -94,6 +97,9 @@ class ifc_element:
         ]
     
     def draw(self, ax, use_2d=True, color='black'):
+        if self.geom is None:
+            return
+            
         es = self.geom.geometry.edges
         vs = self.VV
         
@@ -101,13 +107,18 @@ class ifc_element:
             if not use_2d:
                 raise RuntimeError("hack")
             plan = create_shape_2d(self.inst)
-            es = plan.geometry.edges
+            if plan is None:
+                raise RuntimeError("hack")
+            es_2d = plan.geometry.edges
+            if len(es_2d) == 0:
+                raise RuntimeError("hack")
             vs = numpy.array(plan.geometry.verts).reshape((-1, 3))
             vs = numpy.concatenate((
                 vs,
                 numpy.ones((len(vs), 1))
             ), axis=1)
             vs = numpy.array([self.M @ v for v in vs])
+            es = es_2d
         except RuntimeError as e:
             # use 3d shape
             pass
@@ -118,6 +129,9 @@ class ifc_element:
             ax.plot(ab.T[0], ab.T[1], color=color, lw=0.5)
             
     def draw_arrow(self, ax):
+        if self.geom is None:
+            return
+            
         st, en = self.pts
         en = en - st
         
@@ -134,6 +148,9 @@ class ifc_element:
         )
         
     def draw_quiver(self, flow, xya, filename):
+        if self.geom is None:
+            return
+            
         obj = open(filename, "w")
         obj_c = 1
         
@@ -171,7 +188,9 @@ class ifc_element:
             obj_c += 4
         
     def validate(self, flow):    
-        
+        if self.geom is None:
+            return
+            
         def read(p):
             return flow.lookup(p[0:3], max_dist=0.4)
             # d, i = tree.query(p[0:3])
@@ -267,8 +286,20 @@ def process_doors():
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
     shapes = list(map(create_shape, doors))
     objs = list(map(ifc_element, doors, shapes))
+    
+    def get_decompositions(elem):
+        has_any = False
+        for rel in elem.IsDecomposedBy:
+            for child in rel.RelatedObjects:
+                yield from get_decompositions(child)
+                has_any = True
+        if not has_any:
+            yield elem
 
-    walls = sum(map(lambda f: f.by_type("IfcWall"), fs), [])
+    def flatmap(func, *iterable):
+        return itertools.chain.from_iterable(map(func, *iterable))
+
+    walls = flatmap(get_decompositions, walls)
     wall_shapes = list(map(create_shape, walls))
     wall_objs = list(map(ifc_element, walls, wall_shapes))
 
