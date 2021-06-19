@@ -863,13 +863,12 @@ def process_landings():
             xyzb = get_node_xyz(complete_graph)(b)
             
             # manhattan_dist = sum(numpy.abs(numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing)
-            euclid_dist = numpy.sqrt(numpy.sum(((numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing) ** 2))
+            euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xyzb)) ** 2))
             # avg_dist  = (manhattan_dist + euclid_dist) / 2.
             
-            flow_diff = abs(fa - fb)
+            flow_diff = abs(fa - fb) * flow.spacing / 10. # voxec stores floats as int(v * 10)
             
-            # factor in spacing because it is in voxel units
-            if abs(flow_diff * flow.spacing - euclid_dist) / euclid_dist < 0.08:
+            if abs(flow_diff - euclid_dist) / euclid_dist < 0.1:
                 na = complete_graph.nodes[a.node_id]
                 nb = complete_graph.nodes[b.node_id]
                 
@@ -1065,11 +1064,11 @@ def process_landings():
         points = numpy.concatenate(list(map(get_edge_points, path_to_edges(path))))
         edges = numpy.roll(points, shift=-1, axis=0) - points
         incls = numpy.where(edges[:-1, 2] != 0.)[0]
-        stair = points[incls.min() - 1:incls.max() + 3]
+        stair = points[max(incls.min() - 1, 0):incls.max() + 3]
         sedges = numpy.roll(stair, shift=-1, axis=0) - stair
 
         li = []
-        upw = True        
+        upw = None   # tribool starts unknown ( not false, not true )      
 
         for se in sedges[:-1]:
             if all(se == 0.):
