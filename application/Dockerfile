@@ -7,7 +7,7 @@ RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggest
 
 RUN wget -qO /tmp/mc.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && chmod +x /tmp/mc.sh
 RUN bash /tmp/mc.sh -b -p /conda
-RUN /conda/bin/conda install python=3.8 numba numpy matplotlib scipy scikit-image
+RUN /conda/bin/conda install python=3.8 numba numpy matplotlib scipy scikit-image pandas
 ENV PATH="/conda/bin:${PATH}"
 
 RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham
