@@ -1,10 +1,16 @@
 FROM debian:buster-slim
 
 WORKDIR /
-RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel supervisor
-RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install blender build-essential cmake
-RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install git
-RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz matplotlib scipy scikit-image sknw rdp
+RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install \
+	 unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev \
+	 zlib1g-dev npm supervisor blender build-essential cmake git
+
+RUN wget -qO /tmp/mc.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && chmod +x /tmp/mc.sh
+RUN bash /tmp/mc.sh -b -p /conda
+RUN /conda/bin/conda install python=3.8 numba numpy matplotlib scipy scikit-image
+ENV PATH="/conda/bin:${PATH}"
+
+RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
 ## 3D output conversion: Move to voxel?

@@ -723,6 +723,7 @@ def process_3_26(args, context):
             joined = os.path.join(d, "%03d.dae" % iii)
             subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", *fns, joined])
             collected.append((gd, joined))
+
     
             
     # check for red material name -> error
@@ -785,6 +786,10 @@ walkable_region_offset = offset_xy(walkable_region, 1)
 walkable_region_incl = union(walkable_region, walkable_region_offset)
 seed = intersect(walkable_region_incl, external)
 flow = traverse(walkable_region_incl, seed, connectedness=26, type="uint")
+export_csv(flow, "flow.csv")
+"""
+
+"""
 door_mask = traverse(empty, door_voxels, depth=1.1, connectedness=26)
 flow_masked = intersect(flow, door_mask)
 export_csv(flow_masked, "flow.csv")

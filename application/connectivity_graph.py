@@ -1,3 +1,4 @@
+import os
 import sys
 import ast
 import sknw
@@ -1168,7 +1169,7 @@ elif command == "landings":
 
 try:
     for fn in glob.glob("*.obj"):
-        subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", fn, fn.replace(".obj", ".dae")])
+        subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--", fn, fn.replace(".obj", ".dae")])
         subprocess.check_call(["COLLADA2GLTF-bin", "-i", fn.replace(".obj", ".dae"), "-o", fn.replace(".obj", ".glb"), "-b", "1"])
 except:
     import traceback
