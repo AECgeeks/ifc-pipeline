@@ -791,15 +791,24 @@ export_csv(flow_masked, "flow.csv")
 mesh(flow_masked, "flow.obj")
 """
 
-def process_3_31(args, context):
+def process_connectivity_graph(args, context, command):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
     subprocess.check_call([
         sys.executable,
-        os.path.abspath(os.path.join(os.path.dirname(__file__), 'process_3_31.py')),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), 'connectivity_graph.py')),
         context.id,
-        repr(context.files)
+        repr(context.files),
+        command
     ], cwd=context.path)
 
+def process_3_31(args, context):
+    process_connectivity_graph(args, context, "doors")
+    
+    
+def process_landings(args, context):
+    process_connectivity_graph(args, context, "landings")
+    
+    
 class voxel_execution_context:
     def __init__(self, id, vid, files,  **kwargs):
     
@@ -927,10 +936,21 @@ def stair_headroom(id, config, **kwargs):
         config['ids'],
         **kwargs)
 
+
 def door_direction(id, config, **kwargs):
     process_voxel_check(
         make_script_3_31,
         process_3_31,
+        {},
+        id,
+        config['ids'],
+        **kwargs)
+
+
+def landings(id, config, **kwargs):
+    process_voxel_check(
+        make_script_3_31,
+        process_landings,
         {},
         id,
         config['ids'],
