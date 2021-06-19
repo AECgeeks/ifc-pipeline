@@ -350,6 +350,7 @@ def process_doors():
     def flatmap(func, *iterable):
         return itertools.chain.from_iterable(map(func, *iterable))
 
+    walls = sum(map(lambda f: f.by_type("IfcWall"), fs), [])
     walls = flatmap(get_decompositions, walls)
     wall_shapes = list(map(create_shape, walls))
     wall_objs = list(map(ifc_element, walls, wall_shapes))
