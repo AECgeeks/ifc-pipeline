@@ -664,14 +664,18 @@ def process_3_26(args, context):
     import ifcopenshell
     
     stair_guid_mapping = {}
+    stair_to_children = defaultdict(list)
+    
     for fn in context.files:
         f = ifcopenshell.open(fn)
         for st in f.by_type("IfcStair"):
             stair_guid_mapping[st.id()] = st.GlobalId
+            stair_to_children[st.GlobalId].append(st.id())
             
             for rel in st.IsDecomposedBy:
                 for ch in rel.RelatedObjects:
                     stair_guid_mapping[ch.id()] = st.GlobalId
+                    stair_to_children[st.GlobalId].append(ch.id())
     
     d = os.path.join(context.path, 'tmp')
     os.makedirs(d)
@@ -702,17 +706,38 @@ def process_3_26(args, context):
             
             yield fn2
         
+    # split mesh into separate DAE files
     subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--", *simplify(), os.path.join(d, "%s.dae")])
+    
+    collected = []
+    
+    # join DAEs based on decomposition in IFC
+    for iii, (gd, ch_ids) in enumerate(stair_to_children.items()):
+        fns = [os.path.join(d, "%d.dae" % cid) for cid in ch_ids]
+        fns = list(filter(os.path.exists, fns))
+        if len(fns) == 0:
+            continue
+        elif len(fns) == 1:
+            collected.append((gd, fns[0]))
+        else:
+            joined = os.path.join(d, "%03d.dae" % iii)
+            subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", *fns, joined])
+            collected.append((gd, joined))
+    
             
+    # check for red material name -> error
+    # convert to glTF        
     def convert():
-        for i, fn in enumerate(glob.glob(os.path.join(d, "*.dae"))):
+        for i, (gd, fn) in enumerate(collected):
             error = "red" in open(fn).read()
             id = int(os.path.basename(fn)[:-4])
             fn2 = "../" + context.id + "_%d" % i + ".glb"
             subprocess.check_call(["COLLADA2GLTF-bin", "-i", fn, "-o", fn2, "-b", "1"], cwd=d)
             utils.store_file(context.id + "_%d" % i, "glb")
-            yield i, error, stair_guid_mapping[id]
+            yield i, error, gd
+    
             
+    # format result dict
     def create_issue(tup):
         i, is_error, g = tup
         return {
@@ -720,6 +745,7 @@ def process_3_26(args, context):
             "status": ["NOTICE", "ERROR"][is_error],
             "guid": g
         }
+    
         
     context.put_json(context.id + '.json', {
         'id': context.id,

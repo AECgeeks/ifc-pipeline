@@ -11,7 +11,13 @@ bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 
 for fn in sys.argv[sep + 1:-1]:
-    bpy.ops.import_scene.obj(filepath=fn, axis_forward='Y', axis_up='Z', use_split_groups=True)
+    if fn.endswith(".obj"):
+        bpy.ops.import_scene.obj(filepath=fn, axis_forward='Y', axis_up='Z', use_split_groups=True)
+    elif fn.endswith(".dae"):
+        bpy.ops.wm.collada_import(filepath=fn)
+    else:
+        print(fn)
+        exit()
 
 if split:
     for ob in bpy.data.objects:
