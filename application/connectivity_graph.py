@@ -17,6 +17,8 @@ import matplotlib
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+import pandas as pd
+
 import networkx as nx
 from rdp import rdp
 from scipy.spatial import KDTree
@@ -33,6 +35,7 @@ if WITH_MAYAVI:
 import ifcopenshell
 import ifcopenshell.geom
 
+normalize = lambda v: v / numpy.linalg.norm(v)
 
 #####################
 
@@ -104,6 +107,10 @@ with open("mtl.mtl", 'w') as f:
     f.write("Kd 0.0 1.0 0.0\n\n")
     f.write("newmtl gray\n")
     f.write("Kd 0.6 0.6 0.6\n\n")
+    f.write("newmtl green2\n")
+    f.write("Kd 0.6 1.0 0.6\n\n")
+    f.write("newmtl red2\n")
+    f.write("Kd 1.0 0.6 0.6\n\n")
 
 class ifc_element:
     valid = None
@@ -269,7 +276,7 @@ elev_pairs = list(zip(elevations_2, elevations_2[1:] + [inf]))
 class flow_field:
     
     def __init__(self, fn):
-        self.flow = numpy.genfromtxt(fn, delimiter=',')
+        self.flow = pd.read_csv(fn, delimiter=',').values
         self.flow = self.flow[self.flow[:,3] != 1.]
 
         self.spacing = min(numpy.diff(sorted(set(self.flow.T[0]))))
@@ -725,6 +732,8 @@ def process_landings():
             # new node index
             N = lambda: len(graph.nodes()) + len(nodes_to_add) # + 1
             
+            fig.savefig(fn[:-4] + "_0.png")
+            
             for s,e in graph.edges():
                 ps = graph[s][e]['pts']
                 dz = heights.data[tuple(ps.T)]
@@ -740,7 +749,7 @@ def process_landings():
                     
                 elif not numpy.all(within):
                 
-                    # if storey_idx == 3:
+                    # if storey_idx == 8:
                     #     import pdb; pdb.set_trace()
                     
                     # some outside of the [zmin, zmax] range
@@ -794,16 +803,14 @@ def process_landings():
 
                         if en_ != ps.shape[0] - 1:
                             ENN = N()
+                            # @todo should this still be applied?
                             # en_ += 1
-                            try:
-                                nodes_to_add.append((ENN, {"o": ps[en_]}))
-                            except:
-                                import pdb; pdb.set_trace()
+                            nodes_to_add.append((ENN, {"o": ps[en_]}))
                             
                             # import pdb; pdb.set_trace()
                             
-                            if under[en_] or above[en_]:
-                                tlvl = storey_idx - 1 if under[en_] else storey_idx + 1
+                            if under[en_] or above[en_] or under[en_+1] or above[en_+1]:
+                                tlvl = storey_idx - 1 if (under[en_] or under[en_+1]) else storey_idx + 1
                                 end_points.append(
                                     end_point(ENN, tlvl)
                                 )
@@ -929,8 +936,75 @@ def process_landings():
             if dz.max() - dz.min() > 1.e-5:
                 ps3 = stair_case(ps3)
             mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
+
+            
+    def get_node_intermediate_path(Na, Nb):
+        a_edges = complete_graph[a.node_id]
+        b_edges = complete_graph[b.node_id]
+
+        a_pt = complete_graph.nodes[a.node_id]['o']
+        b_pt = complete_graph.nodes[b.node_id]['o']
+        
+        if len(a_edges) == 1 and len(b_edges) == 1:
+            ae = next(iter(a_edges.values()))
+            be = next(iter(b_edges.values()))
+
+            a_pts = ae['pts']
+            b_pts = be['pts']
+
+                
+            if numpy.linalg.norm(a_pts[0] - a_pt) > 1:
+                a_pts = a_pts[::-1]
+
+
+            if numpy.linalg.norm(b_pts[0] - b_pt) > 1:
+                b_pts = b_pts[::-1]
+
+
+            da = a_pts[0] - a_pts[5]
+            db = b_pts[0] - b_pts[5]
+
+            a0 = a_pts[0]
+            a1 = a0 + da
+
+            b0 = b_pts[0]
+            b1 = b0 + db
+
+            # https://stackoverflow.com/a/3252222
+            def perp( a ) :
+                b = numpy.empty_like(a)
+                b[0] = -a[1]
+                b[1] = a[0]
+                return b
+
+            def seg_intersect(a1,a2, b1,b2) :
+                da = a2-a1
+                db = b2-b1
+                dp = a1-b1
+                dap = perp(da)
+                denom = numpy.dot( dap, db)
+                num = numpy.dot( dap, dp )
+                return (num / denom.astype(float))*db + b1
+            #####################################
+
+            if abs(normalize(da).dot(normalize(db))) < 0.5:
+                
+                xx = numpy.int_(seg_intersect(a0, a1, b0, b1))
+                
+                return numpy.concatenate((
+                    numpy.array(list(bresenham(*a_pt, *xx))),
+                    numpy.array(list(bresenham(*xx, *b_pt)))
+                ))
+
+        return numpy.array(list(bresenham(*a_pt, *b_pt)))
+        
+    for p in all_end_points:
+        print(p)
             
     for a, b in itertools.combinations(all_end_points, 2):        
+    
+        # if {a.node_id, b.node_id} == {1648, 1652}:
+        #     import pdb; pdb.set_trace()
 
         a_to_b = a.to_level == complete_graph.nodes[b.node_id]['level'].storey_idx
         b_to_a = b.to_level == complete_graph.nodes[a.node_id]['level'].storey_idx
@@ -945,32 +1019,47 @@ def process_landings():
             xyza = get_node_xyz(complete_graph)(a)
             xyzb = get_node_xyz(complete_graph)(b)
             
+            ezmin, ezmax = sorted((xyza[2], xyzb[2]))
+            flow_mi_ma = flow.get_slice(ezmin - 1., ezmax + 1.)
+            x, y, arr, heights = flow.get_mean(flow_mi_ma)
+            LD = level_data(-1, (xyza[2] + xyzb[2]) / 2., heights.data, x.data.min(), y.data.min())
+            
             # manhattan_dist = sum(numpy.abs(numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing)
             euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xyzb)) ** 2))
             # avg_dist  = (manhattan_dist + euclid_dist) / 2.
             
             flow_diff = abs(fa - fb) * flow.spacing / 10. # voxec stores floats as int(v * 10)
             
-            if abs(flow_diff - euclid_dist) / euclid_dist < 0.1:
+            if abs(flow_diff - euclid_dist) / euclid_dist < 0.15:
                 na = complete_graph.nodes[a.node_id]
                 nb = complete_graph.nodes[b.node_id]
                 
                 pa = na['o']
                 pb = nb['o']
                 
-                pts = numpy.array(list(bresenham(*pa, *pb)))
+                # pts = numpy.array(list(bresenham(*pa, *pb)))
+                pts = get_node_intermediate_path(a.node_id, b.node_id)
                                 
-                ezmin, ezmax = sorted((xyza[2], xyzb[2]))
-                flow_mi_ma = flow.get_slice(ezmin - 1., ezmax + 1.)
-                x, y, arr, heights = flow.get_mean(flow_mi_ma)
-                
                 # when we cross masked values we know we're connecting wrong points
-                
                 if not numpy.any(heights.mask[tuple(pts.T)]):
-                    
-                    LD = level_data(-1, (xyza[2] + xyzb[2]) / 2., heights.data, x.data.min(), y.data.min())
-
                     complete_graph.add_edge(a.node_id, b.node_id, pts=pts, level=LD)
+                    
+                    
+            # check again with 2d intersection of edges
+            # @todo always do this when |dot| < 0.5
+            """
+            
+                xxxy = xx * flow.spacing + (LD.ymin, LD.xmin)
+                xxz = heights.data[tuple(numpy.int_(xx.T))]
+                xxxyz = numpy.concatenate((xxxy, numpy.atleast_1d(xxz)))
+                
+                euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xxxyz)) ** 2)) + \
+                              numpy.sqrt(numpy.sum((numpy.array(xxxyz) - numpy.array(xyzb)) ** 2))
+            """
+
+    
+    
+                
     
     def draw_nodes(node_colouring=None):
         end_point_ids = {p.node_id for p in all_end_points}
@@ -1125,7 +1214,7 @@ def process_landings():
         for i in range(len(storeys_with_nodes) - 1):
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
-                for na, nb in itertools.product(storey_to_nodes[1], storey_to_nodes[2]):
+                for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
                     for path in nx.all_simple_paths(G, na, nb):
                         if stair_points & set(path[1:-1]):
                             # contains another stair point intermediate in path, skip
@@ -1139,6 +1228,8 @@ def process_landings():
     results = []
                             
     for N, path in enumerate(yield_stair_paths()):
+    
+        # import pdb; pdb.set_trace()
     
         fn = "%s_%d.obj" % (id, N)
         obj = open(fn, "w")
@@ -1182,12 +1273,10 @@ def process_landings():
         results.append(desc)
         
         print('mtllib mtl.mtl\n', file=obj)
-        print('usemtl %s\n' % clr, file=obj)
         
         # import pdb; pdb.set_trace()
         
         horz = sum((y for x,y in zip(upw, li) if not x), [])
-        normalize = lambda v: v / numpy.linalg.norm(v)
         cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
         crss = list(map(cross_z, horz))
         crss.append(crss[-1])
@@ -1195,7 +1284,7 @@ def process_landings():
                
         pt = stair[0].copy()
         avg_i = 0
-        for ii, (is_upw, es) in enumerate(zip(upw, li)):
+        for ii, (is_upw, es, ll) in enumerate(zip(upw, li, lens)):
             d = ii + 1 if ii == 0 else ii - 1
             ref = li[d][0]
             for e in es:                
@@ -1219,6 +1308,8 @@ def process_landings():
                     pt - dx2 / 5. + e,
                     pt - dx  / 5.   
                 ])
+                
+                print('usemtl %s%s\n' % (clr, "" if ll > 0.5 else "2"), file=obj)
                 
                 for p in face_pts:
                     print("v", *p, file=obj)
