@@ -8,6 +8,10 @@ import functools
 import itertools
 import subprocess
 
+import bisect
+import operator
+from collections import Counter
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -272,6 +276,14 @@ elevations = sorted(set(elevations))
 elevations_2 = list(elevations)
 elevations_2[0] = -inf
 elev_pairs = list(zip(elevations_2, elevations_2[1:] + [inf]))
+
+tree_settings = ifcopenshell.geom.settings(
+    DISABLE_TRIANGULATION=True,
+    DISABLE_OPENING_SUBTRACTIONS=True
+)
+tree = ifcopenshell.geom.tree()
+for f in fs:
+    tree.add_file(f, tree_settings)
 
 class flow_field:
     
@@ -633,9 +645,6 @@ def process_landings():
         
         end_points = []
         
-        fn = "section-%04d-%04d-%04d.png" % (elev * 1000, zmin * 1000, zmax * 1000)
-        fig = plt.figure(figsize=(8,12))
-        axx = fig.add_subplot(111)
         
         # We extend beyond zmin and zmax, but trim the graph edges:
         
@@ -644,7 +653,12 @@ def process_landings():
         flow_mi_ma = flow.get_slice(zmin, zmax)
         
         if flow_mi_ma.size:
+                        
             x, y, arr, heights = flow.get_mean(flow_mi_ma)
+            
+            fn = "section-%05d-%05d-%05d.png" % (elev * 1000, zmin * 1000, zmax * 1000)
+            fig = plt.figure(figsize=((x.max() - x.min()), (y.max() - y.min())))
+            axx = fig.add_subplot(111)
             
             # print("x", x.min(), x.data.min())
             # print("y", y.min(), y.data.min())
@@ -732,7 +746,7 @@ def process_landings():
             # new node index
             N = lambda: len(graph.nodes()) + len(nodes_to_add) # + 1
             
-            fig.savefig(fn[:-4] + "_0.png")
+            # fig.savefig(fn[:-4] + "_0.png")
             
             for s,e in graph.edges():
                 ps = graph[s][e]['pts']
@@ -887,6 +901,7 @@ def process_landings():
                 
                 # plot
                 axx.plot(*ps3.T[0:2], 'green')
+                
                 if WITH_MAYAVI:
                     # mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
                     pass
@@ -913,14 +928,16 @@ def process_landings():
                 dz = heights.data[tuple(psn.T)]
                 # @todo use level_data instead of y.data.min() 
                 ps2 = ps * flow.spacing + (y.data.min(), x.data.min())
-                axx.plot(*ps2.T, 'r.')
+                
+                axx.plot(*ps2.T, 'r.', markersize=2)
+                
                 if WITH_MAYAVI:
                     pass
                     # mlab.points3d(*ps2.T, dz, color=(1,0,0), figure=ax_3d, scale_factor=0.05)
                     # for N, xy, z in zip(nodes, ps2, dz):
                     #     mlab.text3d(*xy, z, "%d-%d" % (storey_idx, N), figure=ax_3d, scale=0.05)
 
-        fig.savefig(fn)
+            fig.savefig(fn)
 
     # mlab.savefig("flow-3.png") #, dpi=150)
 
@@ -1174,10 +1191,6 @@ def process_landings():
 
     ifc_storeys = numpy.zeros((len(G.nodes),), dtype=int) - 1
 
-    import bisect
-    import operator
-    from collections import Counter
-
     elevations_covered = numpy.zeros((len(elevations),), dtype=bool)
 
     for zz, cnt in Counter(nzs).most_common():
@@ -1240,6 +1253,22 @@ def process_landings():
         incls = numpy.where(edges[:-1, 2] != 0.)[0]
         stair = points[max(incls.min() - 1, 0):incls.max() + 3]
         sedges = numpy.roll(stair, shift=-1, axis=0) - stair
+        
+        # Find relating element by bounding box search, not very robust,
+        # awaiting change to IfcOpenShell to use exact distance
+        c = Counter()
+        for p in points:
+            lower = p - (0.1,0.1,0.5)
+            upper = p + (0.1,0.1,0.1)
+            box = (tuple(map(float, lower)), tuple(map(float, upper)))
+            for inst in tree.select_box(box):
+                if not inst.is_a("IfcSpace"):
+                    if inst.Decomposes:
+                        inst = inst.Decomposes[0].RelatingObject
+                    c.update([inst])
+        ifc_elem = c.most_common(1)[0][0]
+                
+        # tree.select((1.,1.,1.), extend=0.5)        
 
         li = []
         upw = None   # tribool starts unknown ( not false, not true )      
@@ -1268,7 +1297,8 @@ def process_landings():
         desc = {
             "status": st,
             "numLandings": num_landings,
-            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N)
+            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
+            "guid": ifc_elem.GlobalId
         }            
         results.append(desc)
         
