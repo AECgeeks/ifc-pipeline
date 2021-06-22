@@ -925,7 +925,8 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
 def space_heights(id, config, **kwargs):
     thresholds = config.get(
         'thresholds',
-        [0.0,1.6,1.8,2.0,2.1,2.2,2.3]
+        # [0.0,1.6,1.8,2.0,2.1,2.2,2.3]
+        [0.0,1.6]
     )
     
     try:
