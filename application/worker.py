@@ -636,7 +636,7 @@ stair_voxels_region = voxelize(stairs)
 stair_voxels_empty = constant_like(voxels, 0)
 stair_voxels = union(stair_voxels_region, stair_voxels_empty)
 
-railings = create_geometry(file, include={"IfcRailing"})
+railings = create_geometry(file, include={"IfcRailing"}, optional=1)
 railing_voxels_orig = voxelize(railings)
 railing_voxels_down = sweep(railing_voxels_orig, dx=0.0, dy=0.0, dz=-1.0)
 stair_voxels_wo_railing = subtract(stair_voxels, railing_voxels_orig)
@@ -648,7 +648,7 @@ extrusion = sweep(stair_voxels_wo_railing, dx=0.0, dy=0.0, dz=-0.4)
 stair_top = subtract(stair_offset_min, extrusion)
 
 reachable = get_reachability(file)
-stair_top_reachable = intersect(stair_top, reachable)
+stair_top_reachable = intersect(stair_top, reachable, if_non_empty=1)
 
 space = sweep(stair_top_reachable, dx=0, dy=0, dz=1, until=voxels)
 cnt = collapse_count(space, dx=0, dy=0, dz=-1)
