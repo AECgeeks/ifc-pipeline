@@ -563,6 +563,8 @@ def process_3_4(args, context):
         'id': context.id
     })
     
+    utils.store_file(context.id, "json")
+    
 def make_script_3_26(args):
     h = args['height']
     h = int(h / 0.05)
