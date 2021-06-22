@@ -754,6 +754,9 @@ def process_3_26(args, context):
         'id': context.id,
         'results': list(map(create_issue, convert()))
     })
+    
+    utils.store_file(context.id, "json")
+
 
 def make_script_3_31(args):
     return """file = parse("*.ifc")
