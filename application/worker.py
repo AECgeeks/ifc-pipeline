@@ -807,6 +807,7 @@ mesh(flow_masked, "flow.obj")
 
 def process_connectivity_graph(args, context, command):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
+    
     subprocess.check_call([
         sys.executable,
         os.path.abspath(os.path.join(os.path.dirname(__file__), 'connectivity_graph.py')),
@@ -814,6 +815,12 @@ def process_connectivity_graph(args, context, command):
         repr(context.files),
         command
     ], cwd=context.path)
+    
+    # store json and gltfs
+    utils.store_file(context.id, "json")
+    for fn in glob.glob(os.path.join(context.path, "*.glb")):
+        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+
 
 def process_3_31(args, context):
     process_connectivity_graph(args, context, "doors")
