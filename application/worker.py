@@ -758,12 +758,15 @@ def make_script_3_31(args):
 surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
 slabs = create_geometry(file, include={"IfcSlab"})
 doors = create_geometry(file, include={"IfcDoor"})
+door_filter = filter_properties(file, IsExternal=1)
+external_doors = create_geometry(door_filter, include={"IfcDoor"})
 all_surfaces = create_geometry(file)
 
 surface_voxels_region = voxelize(surfaces)
 slab_voxels_region = voxelize(slabs)
 door_voxels_region = voxelize(doors)
 voxels = voxelize(all_surfaces)
+external_door_voxels = voxelize(external_doors)
 
 empty = constant_like(voxels, 0, type="bit")
 surface_voxels = union(empty, surface_voxels_region)
@@ -781,12 +784,18 @@ walkable_seed_real = subtract(walkable_seed, surfaces_padded)
 reachable = traverse(walkable_region, walkable_seed_real)
 reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
 reachable_bottom = subtract(reachable, reachable_shifted)
+
+seed = intersect(walkable_region, external_door_voxels)
+
+flow = traverse(walkable_region, seed, connectedness=26, type="uint")
+export_csv(flow, "flow.csv")
+"""
+
+"""
 external = exterior(voxels)
 walkable_region_offset = offset_xy(walkable_region, 1)
 walkable_region_incl = union(walkable_region, walkable_region_offset)
 seed = intersect(walkable_region_incl, external)
-flow = traverse(walkable_region_incl, seed, connectedness=26, type="uint")
-export_csv(flow, "flow.csv")
 """
 
 """
