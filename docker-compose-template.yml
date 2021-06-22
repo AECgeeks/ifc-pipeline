@@ -29,7 +29,7 @@ services:
       - server
       - /data
     labels:
-      kompose.volume.size: 1Gi
+      kompose.volume.size: 32Gi
     volumes:
       - ./docker-volumes/minio:/data
     expose:
