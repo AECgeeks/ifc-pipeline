@@ -79,6 +79,8 @@ def store_file(id, ext):
             client.make_bucket("ifc-pipeline")
         client.fput_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
         print("store", id, ext)
+    else:
+        print("not storing", id, ext)
 
             
 def validate_id(id):
