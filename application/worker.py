@@ -833,7 +833,59 @@ def process_3_31(args, context):
     
 def process_landings(args, context):
     process_connectivity_graph(args, context, "landings")
+
+
+def make_script_safety_barriers(args):
+    return """file = parse("*.ifc")
+surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+slabs = create_geometry(file, include={"IfcSlab"})
+doors = create_geometry(file, include={"IfcDoor"})
+surface_voxels = voxelize(surfaces)
+slab_voxels = voxelize(slabs)
+door_voxels = voxelize(doors)
+walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
+walkable_minus = subtract(walkable, slab_voxels)
+walkable_seed = intersect(door_voxels, walkable_minus)
+surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
+surfaces_padded = offset_xy(surface_voxels, 0.1)
+surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
+walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
+walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+reachable = traverse(walkable_region, walkable_seed_real)
+reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
+reachable_bottom = subtract(reachable, reachable_shifted)
+reachable_padded = offset_xy(reachable_bottom, 0.2)
+full = constant_like(surface_voxels, 1)
+surfaces_sweep_1m = sweep(surface_voxels, dx=0, dy=0, dz=1.0)
+deadly = subtract(full, surfaces_sweep_1m)
+really_reachable = subtract(reachable_padded, surfaces_obstacle)
+result = intersect(really_reachable, deadly)
+mesh(result, "result.obj")
+"""
+
+
+def process_safety_barriers(args, context):
+    context.get_file('result.obj', target=os.path.join(context.path, 'result.obj'))
+
+    subprocess.check_call([
+        sys.executable,
+        "simplify_obj.py",
+        os.path.join(context.path, 'result.obj'),
+        os.path.join(context.path, 'simplified.obj')
+    ])
     
+    subprocess.check_call([
+        sys.executable,
+        os.path.abspath(os.path.join(os.path.dirname(__file__), 'annotate_safety_barriers.py')),
+        context.id,
+        repr(context.files)
+    ], cwd=context.path)
+    
+    # store json and gltfs
+    utils.store_file(context.id, "json")
+    for fn in glob.glob(os.path.join(context.path, "*.glb")):
+        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+
     
 class voxel_execution_context:
     def __init__(self, id, vid, files,  **kwargs):
@@ -982,3 +1034,15 @@ def landings(id, config, **kwargs):
         id,
         config['ids'],
         **kwargs)
+
+
+def safety_barriers(id, config, **kwargs):
+    process_voxel_check(
+        make_script_safety_barriers,
+        process_safety_barriers,
+        {},
+        id,
+        config['ids'],
+        **kwargs)
+
+

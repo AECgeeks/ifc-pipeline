@@ -62,7 +62,7 @@ def get_file_progress(id):
    
 @application.route("/run/<check>", methods=['POST'])
 def initiate_check_escape_routes(check):
-    if check not in {'escape_routes', 'calculate_volume', 'space_heights', 'stair_headroom', 'door_direction', 'landings'}:
+    if check not in {'escape_routes', 'calculate_volume', 'space_heights', 'stair_headroom', 'door_direction', 'landings', 'safety_barriers'}:
         abort(404)
         
     id = utils.generate_id()
