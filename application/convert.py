@@ -24,8 +24,12 @@ for fn in sys.argv[sep + 1:-1]:
 if orient:
     for obj in list(bpy.data.objects):
         bpy.ops.object.select_all(action='DESELECT')
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
+        if hasattr(obj, 'select'):
+            obj.select = True
+            bpy.context.scene.objects.active = obj
+        else:
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.remove_doubles()
