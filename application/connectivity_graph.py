@@ -89,9 +89,12 @@ def wrap_try(fn):
             return None
     return inner
 
-id, fns, command = sys.argv[1:]
+id, fns, command, config = sys.argv[1:]
 
 fns = ast.literal_eval(fns)
+config = ast.literal_eval(config)
+
+LANDING_LENGTH = config.get('length', 0.5)
 
 settings = ifcopenshell.geom.settings(
     USE_WORLD_COORDS=False
@@ -1288,7 +1291,7 @@ def process_landings():
         num_landings = 0
         
         for is_upw, ll in zip(upw, lens):
-            if is_upw is False and ll > 0.5:
+            if is_upw is False and ll > LANDING_LENGTH:
                 num_landings += 1
                 
         clr = 'red' if num_landings == 0 else 'green'

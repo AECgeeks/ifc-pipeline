@@ -818,7 +818,8 @@ def process_connectivity_graph(args, context, command):
         os.path.abspath(os.path.join(os.path.dirname(__file__), 'connectivity_graph.py')),
         context.id,
         repr(context.files),
-        command
+        command,
+        repr(args)
     ], cwd=context.path)
     
     # store json and gltfs
@@ -1027,10 +1028,18 @@ def door_direction(id, config, **kwargs):
 
 
 def landings(id, config, **kwargs):
+    length = config.get('length', 2.2)
+
+    try:
+        length = float(length)
+    except:
+        abort(400)
+
+
     process_voxel_check(
         make_script_3_31,
         process_landings,
-        {},
+        {'length': length},
         id,
         config['ids'],
         **kwargs)
