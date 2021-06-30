@@ -63,7 +63,7 @@ def to_tuple(xyz):
     return (xyz.X(), xyz.Y()) + ((xyz.Z(),) if hasattr(xyz, "Z") else ())
 
 
-
+print(*enumerate(sys.argv))
 id = sys.argv[1]
 width = float(sys.argv[2])
 depth = float(sys.argv[3])
@@ -142,25 +142,25 @@ for N, door in enumerate(external_doors):
         st = "NOTICE"
         clr = "green"
     
-    obj = open("%s_%d.obj" % (id, N), "w")
-    obj_c = 1
-    
-    print('mtllib mtl.mtl\n', file=obj)
-    print('usemtl %s\n' % clr, file=obj)
-    
-    for face in yield_subshapes(box, TopAbs_FACE):
-        wire = OCC.Core.BRepTools.breptools_OuterWire(face)
-        vertices = list(yield_subshapes(wire, vertices=True))
-        points = list(map(OCC.Core.BRep.BRep_Tool.Pnt, vertices))
-        xyzs = list(map(to_tuple, points))
+    with open("%s_%d.obj" % (id, N), "w") as obj:
+        obj_c = 1
         
-        for xyz in xyzs:
-            print("v", *xyz, file=obj)
+        print('mtllib mtl.mtl\n', file=obj)
+        print('usemtl %s\n' % clr, file=obj)
+        
+        for face in yield_subshapes(box, TopAbs_FACE):
+            wire = OCC.Core.BRepTools.breptools_OuterWire(face)
+            vertices = list(yield_subshapes(wire, vertices=True))
+            points = list(map(OCC.Core.BRep.BRep_Tool.Pnt, vertices))
+            xyzs = list(map(to_tuple, points))
             
-        print("f", *range(obj_c, len(xyzs)+obj_c), file=obj)
+            for xyz in xyzs:
+                print("v", *xyz, file=obj)
+                
+            print("f", *range(obj_c, len(xyzs)+obj_c), file=obj)
+            
+            obj_c += len(xyzs)
         
-        obj_c += len(xyzs)
-    
     desc = {
         "status": st,
         "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),

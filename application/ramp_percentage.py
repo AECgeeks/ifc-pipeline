@@ -117,16 +117,16 @@ for N, ramp in enumerate(ramps):
     points = list(map(OCC.Core.BRep.BRep_Tool.Pnt, vertices))
     xyzs = list(map(to_tuple, points))
     
-    obj = open("%s_%d.obj" % (id, N), "w")
-    
-    print('mtllib mtl.mtl\n', file=obj)
-    print('usemtl %s\n' % clr, file=obj)
-    
-    for xyz in xyzs:
-        print("v", *xyz, file=obj)
+    with open("%s_%d.obj" % (id, N), "w") as obj:
         
-    print("f", *range(1, len(xyzs)+1), file=obj)
-    
+        print('mtllib mtl.mtl\n', file=obj)
+        print('usemtl %s\n' % clr, file=obj)
+        
+        for xyz in xyzs:
+            print("v", *xyz, file=obj)
+            
+        print("f", *range(1, len(xyzs)+1), file=obj)
+        
     desc = {
         "status": st,
         "percentage": percentage,

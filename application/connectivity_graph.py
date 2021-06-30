@@ -1368,7 +1368,7 @@ def process_landings():
                     pt - dx  / 5.   
                 ])
                 
-                print('usemtl %s%s\n' % (clr, "" if ll > 0.5 else "2"), file=obj)
+                print('usemtl %s%s\n' % (clr, "" if ll > LENGTH else "2"), file=obj)
                 
                 for p in face_pts:
                     print("v", *p, file=obj)
@@ -1424,22 +1424,33 @@ def process_routes():
             
     
     def yield_routes():
-        for sp, nodes in nodes_by_space.items():
+        for sp, space_nodes in nodes_by_space.items():
             
             max_len = 0
             longest_path = None
             
-            for na, nb in itertools.product(nodes, exterior_nodes):
-                for path in nx.all_simple_paths(G.G, na, nb):
-                    points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
-                    edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
-                    plen = sum(map(numpy.linalg.norm, edges))
-                    
-                    if plen > max_len:
-                        max_len = plen
-                        longest_path = points
+            # for na, nb in itertools.product(nodes, exterior_nodes):
+            
+            for na in space_nodes:
+                
+                min_len_space = 1e9
+                shortest_path_space = None
+                
+                for nb in exterior_nodes:
+                    for path in nx.all_simple_paths(G.G, na, nb):
+                        points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
+                        edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
+                        plen = sum(map(numpy.linalg.norm, edges))
                         
-            yield sp, nodes, path, points, edges
+                        if plen < min_len_space:
+                            min_len_space = plen
+                            shortest_path_space = points
+                        
+                if min_len_space > max_len:
+                    max_len = min_len_space
+                    longest_path = shortest_path_space
+                        
+            yield sp, space_nodes, path, points, edges
             
             
     def break_at_doors(tup):
@@ -1452,7 +1463,7 @@ def process_routes():
             # if dobj.inst.GlobalId == "2OBrcmyk58NupXoVOHUuXp" and sp.GlobalId == "0BTBFw6f90Nfh9rP1dl_3A":
             #     import pdb; pdb.set_trace()
 
-            is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 0.5
+            is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
             is_external = is_external_mapping.get(dobj)
             
             if is_fire_door and not is_external:
@@ -1527,7 +1538,7 @@ def process_routes():
         results.append(desc)
         
         for spoints, sedges, slen in zip(segments, segment_edges, lens):
-            
+        
             clr = 'red' if is_error(slen) else 'green'
             
             li = []
@@ -1545,6 +1556,10 @@ def process_routes():
             upw = [bool(x[0][2]) for x in li]
              
             horz = sum((y for x,y in zip(upw, li) if not x), [])
+            
+            if len(horz) == 0:
+                continue
+            
             cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
             crss = list(map(cross_z, horz))
             crss.append(crss[-1])

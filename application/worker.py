@@ -291,7 +291,7 @@ def process(id, callback_url, **kwargs):
         r = requests.post(callback_url, data={"status": status, "id": id})
 
 
-def escape_routes(id, config, **kwargs):
+def escape_routes_old(id, config, **kwargs):
 
         d = utils.storage_dir_for_id(id, output=True)
         os.makedirs(d)
@@ -836,6 +836,41 @@ def process_landings(args, context):
     process_connectivity_graph(args, context, "landings")
 
 
+def process_routes(args, context):
+    process_connectivity_graph(args, context, "routes")
+
+
+def process_non_voxel_check(command, args, id, ids, **kwargs):
+
+    try:
+        set_progress(id, 0)
+        
+        files = [utils.ensure_file(f, "ifc") for f in ids]
+        
+        path = utils.storage_dir_for_id(id, output=True)
+        os.makedirs(path)
+
+        subprocess.check_call([
+            sys.executable,
+            os.path.abspath(os.path.join(os.path.dirname(__file__), command + '.py')),
+            id,
+            *map(str, args),
+            *files,
+        ], cwd=path)
+        
+        set_progress(id, 100)
+
+    except:
+        traceback.print_exc(file=sys.stdout)
+        set_progress(id, -2)
+    
+    # store json and gltfs
+    utils.store_file(id, "json")
+    for fn in glob.glob(os.path.join(path, "*.glb")):
+        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+
+
+
 def make_script_safety_barriers(args):
     return """file = parse("*.ifc")
 surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
@@ -1045,6 +1080,23 @@ def landings(id, config, **kwargs):
         **kwargs)
 
 
+def escape_routes(id, config, **kwargs):
+    length = config.get('length', 20.)
+
+    try:
+        length = float(length)
+    except:
+        abort(400)
+
+    process_voxel_check(
+        make_script_3_31,
+        process_routes,
+        {'length': length},
+        id,
+        config['ids'],
+        **kwargs)
+
+
 def safety_barriers(id, config, **kwargs):
     process_voxel_check(
         make_script_safety_barriers,
@@ -1054,4 +1106,39 @@ def safety_barriers(id, config, **kwargs):
         config['ids'],
         **kwargs)
 
+
+def entrance_area(id, config, **kwargs):
+    width = config.get('width', 1.5)
+    depth = config.get('depth', 1.5)
+
+    try:
+        width = float(width)
+        depth = float(depth)
+    except:
+        abort(400)
+    
+    process_non_voxel_check(
+        'entrance_area',
+        [width, depth],
+        id,
+        config['ids'],
+        **kwargs)
+
+
+def ramp_percentage(id, config, **kwargs):
+    warning = config.get('warning', 6)
+    error = config.get('error', 10)
+
+    try:
+        warning = float(warning)
+        error = float(error)
+    except:
+        abort(400)
+    
+    process_non_voxel_check(
+        'ramp_percentage',
+        [warning, error],
+        id,
+        config['ids'],
+        **kwargs)
 
