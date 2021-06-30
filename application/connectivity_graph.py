@@ -10,7 +10,7 @@ import subprocess
 
 import bisect
 import operator
-from collections import Counter
+from collections import Counter, defaultdict
 
 from dataclasses import dataclass
 from typing import Any
@@ -38,6 +38,7 @@ if WITH_MAYAVI:
 
 import ifcopenshell
 import ifcopenshell.geom
+import ifcopenshell.util.element
 
 normalize = lambda v: v / numpy.linalg.norm(v)
 
@@ -94,7 +95,7 @@ id, fns, command, config = sys.argv[1:]
 fns = ast.literal_eval(fns)
 config = ast.literal_eval(config)
 
-LANDING_LENGTH = config.get('length', 0.5)
+LENGTH = config.get('length', 0.5)
 
 settings = ifcopenshell.geom.settings(
     USE_WORLD_COORDS=False
@@ -125,6 +126,12 @@ class ifc_element:
     def __init__(self, inst, geom):
         self.inst = inst
         self.geom = geom
+        
+        self.width, self.height = None, None
+        if hasattr(inst, "OverallWidth"):
+            self.width = inst.OverallWidth * lu
+        if hasattr(inst, "OverallHeight"):
+            self.height = inst.OverallHeight * lu
         
         if self.geom is None:
             return
@@ -529,7 +536,155 @@ def process_doors():
             "results": results
         }, f)
 
-def process_landings():
+
+class connectivity_graph:
+
+    def __init__(self, G):
+        self.G = G
+        
+        
+    def get_node_z(self, n):
+        attrs = self.G.nodes[n]
+        LD = attrs['level']
+        idx = numpy.int_(attrs['o'])
+        return LD.height_map[idx[0], idx[1]]
+    
+    def get_node_xyz(self, n):
+        attrs = self.G.nodes[n]
+        xy = attrs['o']
+        xyn = tuple(numpy.int16(xy))
+        LD = attrs['level']
+        dz = LD.height_map[xyn]
+        xy2 = xy * flow.spacing + (LD.ymin, LD.xmin)
+        xyz = tuple(xy2) + (dz,)
+        return tuple(map(float, xyz))
+        
+    def get_edge_dz(self, se):
+        attrs = self.G[se[0]][se[1]]
+        ps = attrs['pts']
+        LD = attrs['level']
+        dz = LD.height_map[tuple(ps.T)]
+        return dz.max() - dz.min()
+
+
+    def get_edge_points(self, se):
+        attrs = self.G[se[0]][se[1]]
+        ps = attrs['pts']
+
+        st_o = self.G.nodes[se[0]]['o']
+        en_o = self.G.nodes[se[1]]['o']
+
+        if (numpy.linalg.norm(ps[ 0] - st_o) > numpy.linalg.norm(ps[-1] - st_o)) and \
+           (numpy.linalg.norm(ps[-1] - en_o) > numpy.linalg.norm(ps[ 0] - en_o)):
+                ps = ps[::-1, :]
+
+        LD = attrs['level']
+        dz = LD.height_map[tuple(ps.T)]
+        ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
+        ps3 = numpy.column_stack((ps2, dz))
+        if dz.max() - dz.min() > 1.e-5:
+            ps3 = stair_case(ps3)
+        return ps3
+
+    def __getattr__(self, k):
+        return getattr(self.G, k)
+        
+    def draw_nodes(self, node_colouring=None):
+        end_point_ids = {p.node_id for p in all_end_points}
+        
+        nodes = self.G.nodes()
+        sorted_nodes = sorted(map(int, nodes))
+        
+        if node_colouring is None:
+            end_point_mask = numpy.array([x in end_point_ids for x in sorted_nodes])
+        else:
+            end_point_mask = numpy.array([x in node_colouring for x in sorted_nodes])
+        
+        ps = numpy.array([nodes[i]['o'] for i in sorted_nodes])
+        levels = [nodes[i]['level'] for i in sorted_nodes]
+        offset = numpy.array([(l.ymin, l.xmin) for l in levels])
+        psn = numpy.int16(ps)
+        
+        dz = numpy.zeros((len(nodes),))
+        
+        flow_dist = numpy.zeros((len(nodes),))
+        for p in all_end_points:
+            flow_dist[p.node_id] = flow.lookup(get_node_xyz(self.G)(p))
+
+        for L in set(levels):
+            mask = numpy.array([L == l for l in levels])
+            dz[mask] = L.height_map[tuple(psn[mask].T)]
+            
+        ps2 = ps * flow.spacing + offset
+        
+        mlab.points3d(*ps2[~end_point_mask].T, dz[~end_point_mask], color=(0.5,0.5,0.5), figure=ax_3d, scale_factor=0.1)
+        mlab.points3d(*ps2[ end_point_mask].T, dz[ end_point_mask], color=(1.0,0.0,0.0), figure=ax_3d, scale_factor=0.1)
+        
+        for N, xy, z, L, fd in zip(sorted_nodes, ps2, dz, levels, flow_dist):
+            s = "    %d-%d" % (L.storey_idx, N)
+            if fd:
+                s += "(%d)" % fd
+            mlab.text3d(*xy, z, s, figure=ax_3d, scale=0.05)
+            
+    def draw_edges(self):
+        for s,e in self.G.edges():
+            attrs = self.G[s][e]
+            ps = attrs['pts']
+            LD = attrs['level']
+            dz = LD.height_map[tuple(ps.T)]
+            ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
+            ps_3d = numpy.column_stack((ps2, dz))
+            ps3 = ps_3d
+            if dz.max() - dz.min() > 1.e-5:
+                ps3 = stair_case(ps3)
+            mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
+
+                            
+def path_to_edges(p):
+    return [(p[i], p[i+1]) for i in range(len(p)-1)] 
+    
+# https://stackoverflow.com/a/3252222
+def perp( a ) :
+    b = numpy.empty_like(a)
+    b[0] = -a[1]
+    b[1] = a[0]
+    return b
+
+def seg_intersect(a1,a2, b1,b2) :
+    da = a2-a1
+    db = b2-b1
+    dp = a1-b1
+    dap = perp(da)
+    denom = numpy.dot( dap, db)
+    num = numpy.dot( dap, dp )
+    return (num / denom.astype(float))*db + b1
+#####################################
+
+# create nice staircases by splitting dZ of the edges from dXY
+def stair_case(points):
+    # compute edge vectors
+    edges = numpy.roll(points, shift=-1, axis=0) - points
+    
+    def split_xy_z(x):
+      # generator that splits dZ from dXY
+      for y in x:
+        if abs(y[2]) > 1e-5:
+            zz = numpy.zeros_like(y)
+            zz[2] = y[2]
+            yield zz
+            xyxy = y.copy()
+            xyxy[2] = 0.
+            yield xyxy
+        else: yield y
+    
+    edges2 = numpy.array(list(split_xy_z(edges[:-1])))
+    edges2_start = numpy.row_stack((points[0], edges2))
+    
+    # cumsum to apply deltas to start point
+    return numpy.cumsum(edges2_start, axis=0)
+    
+
+def create_connectivity_graph():
 
     if WITH_MAYAVI:
         ax_3d = mlab.figure(size=(1600, 1200))
@@ -579,31 +734,7 @@ def process_landings():
         ranges.append((st, en, st2, en2))
         
     complete_graph = nx.Graph()
-
-    # create nice staircases by splitting dZ of the edges from dXY
-    def stair_case(points):
-        # compute edge vectors
-        edges = numpy.roll(points, shift=-1, axis=0) - points
-        
-        def split_xy_z(x):
-          # generator that splits dZ from dXY
-          for y in x:
-            if abs(y[2]) > 1e-5:
-                zz = numpy.zeros_like(y)
-                zz[2] = y[2]
-                yield zz
-                xyxy = y.copy()
-                xyxy[2] = 0.
-                yield xyxy
-            else: yield y
-        
-        edges2 = numpy.array(list(split_xy_z(edges[:-1])))
-        edges2_start = numpy.row_stack((points[0], edges2))
-        
-        # cumsum to apply deltas to start point
-        return numpy.cumsum(edges2_start, axis=0)
-        
-        
+       
     @dataclass
     class level_data:
         storey_idx : Any
@@ -944,19 +1075,6 @@ def process_landings():
 
     # mlab.savefig("flow-3.png") #, dpi=150)
 
-    def draw_edges():
-        for s,e in complete_graph.edges():
-            attrs = complete_graph[s][e]
-            ps = attrs['pts']
-            LD = attrs['level']
-            dz = LD.height_map[tuple(ps.T)]
-            ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
-            ps_3d = numpy.column_stack((ps2, dz))
-            ps3 = ps_3d
-            if dz.max() - dz.min() > 1.e-5:
-                ps3 = stair_case(ps3)
-            mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
-
             
     def get_node_intermediate_path(Na, Nb):
         a_edges = complete_graph[a.node_id]
@@ -989,23 +1107,6 @@ def process_landings():
 
             b0 = b_pts[0]
             b1 = b0 + db
-
-            # https://stackoverflow.com/a/3252222
-            def perp( a ) :
-                b = numpy.empty_like(a)
-                b[0] = -a[1]
-                b[1] = a[0]
-                return b
-
-            def seg_intersect(a1,a2, b1,b2) :
-                da = a2-a1
-                db = b2-b1
-                dp = a1-b1
-                dap = perp(da)
-                denom = numpy.dot( dap, db)
-                num = numpy.dot( dap, dp )
-                return (num / denom.astype(float))*db + b1
-            #####################################
 
             if abs(normalize(da).dot(normalize(db))) < 0.5:
                 
@@ -1076,88 +1177,10 @@ def process_landings():
                 euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xxxyz)) ** 2)) + \
                               numpy.sqrt(numpy.sum((numpy.array(xxxyz) - numpy.array(xyzb)) ** 2))
             """
-
-    
-    
-                
-    
-    def draw_nodes(node_colouring=None):
-        end_point_ids = {p.node_id for p in all_end_points}
-        
-        nodes = complete_graph.nodes()
-        sorted_nodes = sorted(map(int, nodes))
-        
-        if node_colouring is None:
-            end_point_mask = numpy.array([x in end_point_ids for x in sorted_nodes])
-        else:
-            end_point_mask = numpy.array([x in node_colouring for x in sorted_nodes])
-        
-        ps = numpy.array([nodes[i]['o'] for i in sorted_nodes])
-        levels = [nodes[i]['level'] for i in sorted_nodes]
-        offset = numpy.array([(l.ymin, l.xmin) for l in levels])
-        psn = numpy.int16(ps)
-        
-        dz = numpy.zeros((len(nodes),))
-        
-        flow_dist = numpy.zeros((len(nodes),))
-        for p in all_end_points:
-            flow_dist[p.node_id] = flow.lookup(get_node_xyz(complete_graph)(p))
-
-        for L in set(levels):
-            mask = numpy.array([L == l for l in levels])
-            dz[mask] = L.height_map[tuple(psn[mask].T)]
-            
-        ps2 = ps * flow.spacing + offset
-        
-        mlab.points3d(*ps2[~end_point_mask].T, dz[~end_point_mask], color=(0.5,0.5,0.5), figure=ax_3d, scale_factor=0.1)
-        mlab.points3d(*ps2[ end_point_mask].T, dz[ end_point_mask], color=(1.0,0.0,0.0), figure=ax_3d, scale_factor=0.1)
-        
-        for N, xy, z, L, fd in zip(sorted_nodes, ps2, dz, levels, flow_dist):
-            s = "    %d-%d" % (L.storey_idx, N)
-            if fd:
-                s += "(%d)" % fd
-            mlab.text3d(*xy, z, s, figure=ax_3d, scale=0.05)
-    
-    if WITH_MAYAVI:
-        draw_edges()
-    
     
     G = complete_graph
-
     
-    def get_node_z(n):
-        attrs = G.nodes[n]
-        LD = attrs['level']
-        idx = numpy.int_(attrs['o'])
-        return LD.height_map[idx[0], idx[1]]
-        
-        
-    def get_edge_dz(se):
-        attrs = G[se[0]][se[1]]
-        ps = attrs['pts']
-        LD = attrs['level']
-        dz = LD.height_map[tuple(ps.T)]
-        return dz.max() - dz.min()
-
-
-    def get_edge_points(se):
-        attrs = G[se[0]][se[1]]
-        ps = attrs['pts']
-
-        st_o = G.nodes[se[0]]['o']
-        en_o = G.nodes[se[1]]['o']
-
-        if (numpy.linalg.norm(ps[ 0] - st_o) > numpy.linalg.norm(ps[-1] - st_o)) and \
-           (numpy.linalg.norm(ps[-1] - en_o) > numpy.linalg.norm(ps[ 0] - en_o)):
-                ps = ps[::-1, :]
-
-        LD = attrs['level']
-        dz = LD.height_map[tuple(ps.T)]
-        ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
-        ps3 = numpy.column_stack((ps2, dz))
-        if dz.max() - dz.min() > 1.e-5:
-            ps3 = stair_case(ps3)
-        return ps3
+    return connectivity_graph(G)
 
     
     """
@@ -1190,7 +1213,12 @@ def process_landings():
     # 
     # 
     
-    nzs = list(map(get_node_z, G.nodes))
+    
+def process_landings():
+    
+    G = create_connectivity_graph()
+    
+    nzs = list(map(G.get_node_z, G.nodes))
 
     ifc_storeys = numpy.zeros((len(G.nodes),), dtype=int) - 1
 
@@ -1209,7 +1237,7 @@ def process_landings():
         enumerate(ifc_storeys)
     ))
                     
-    edge_dzs = list(map(get_edge_dz, G.edges))
+    edge_dzs = list(map(G.get_edge_dz, G.edges))
     ndz = sum(map(
         operator.itemgetter(1), 
         filter(lambda t: t[0] != 0., zip(edge_dzs, G.edges))
@@ -1218,7 +1246,8 @@ def process_landings():
     stair_points = node_to_ifc_storey.keys() & ndz
     
     if WITH_MAYAVI:
-        draw_nodes(stair_points)
+        G.draw_edges()
+        G.draw_nodes(stair_points)
       
     storeys_with_nodes = sorted(set(list(map(node_to_ifc_storey.__getitem__, stair_points))))
 
@@ -1231,15 +1260,12 @@ def process_landings():
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
-                    for path in nx.all_simple_paths(G, na, nb):
+                    for path in nx.all_simple_paths(G.G, na, nb):
                         if stair_points & set(path[1:-1]):
                             # contains another stair point intermediate in path, skip
                             pass
                         else:
                             yield path
-                            
-    def path_to_edges(p):
-        return [(p[i], p[i+1]) for i in range(len(p)-1)]
         
     results = []
                             
@@ -1251,7 +1277,7 @@ def process_landings():
         obj = open(fn, "w")
         obj_c = 1
         
-        points = numpy.concatenate(list(map(get_edge_points, path_to_edges(path))))
+        points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
         edges = numpy.roll(points, shift=-1, axis=0) - points
         incls = numpy.where(edges[:-1, 2] != 0.)[0]
         stair = points[max(incls.min() - 1, 0):incls.max() + 3]
@@ -1291,7 +1317,7 @@ def process_landings():
         num_landings = 0
         
         for is_upw, ll in zip(upw, lens):
-            if is_upw is False and ll > LANDING_LENGTH:
+            if is_upw is False and ll > LENGTH:
                 num_landings += 1
                 
         clr = 'red' if num_landings == 0 else 'green'
@@ -1367,11 +1393,210 @@ def process_landings():
     
     if WITH_MAYAVI:
         mlab.show()
+        
+def process_routes():
+
+    results = []
+
+    G = create_connectivity_graph()
+
+    nodes_by_space = defaultdict(list)
+    exterior_nodes = []
+    xyzs = numpy.array(list(map(G.get_node_xyz, G.nodes)))
+    
+    for n, xyz in zip(G.nodes, xyzs):
+        for inst in tree.select(tuple(map(float, xyz))):
+            if inst.is_a("IfcSpace"):
+                nodes_by_space[inst].append(n)
+                
+    doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
+    shapes = list(map(create_shape, doors))
+    objs = list(map(ifc_element, doors, shapes))
+    
+    is_external_mapping = {}
+                
+    for inst, dobj in zip(doors, objs):
+        is_external = ifcopenshell.util.element.get_psets(inst).get('Pset_DoorCommon', {}).get('IsExternal', False) is True
+        is_external_mapping[dobj] = is_external
+        if is_external:
+            node_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
+            exterior_nodes.append(node_idx)
+            
+    
+    def yield_routes():
+        for sp, nodes in nodes_by_space.items():
+            
+            max_len = 0
+            longest_path = None
+            
+            for na, nb in itertools.product(nodes, exterior_nodes):
+                for path in nx.all_simple_paths(G.G, na, nb):
+                    points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
+                    edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
+                    plen = sum(map(numpy.linalg.norm, edges))
+                    
+                    if plen > max_len:
+                        max_len = plen
+                        longest_path = points
+                        
+            yield sp, nodes, path, points, edges
+            
+            
+    def break_at_doors(tup):
+        sp, nodes, path, points, edges = tup
+        
+        last_break = 0
+        previous_break_point = ()
+        
+        for inst, dobj in zip(doors, objs):
+            # if dobj.inst.GlobalId == "2OBrcmyk58NupXoVOHUuXp" and sp.GlobalId == "0BTBFw6f90Nfh9rP1dl_3A":
+            #     import pdb; pdb.set_trace()
+
+            is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 0.5
+            is_external = is_external_mapping.get(dobj)
+            
+            if is_fire_door and not is_external:
+            
+                
+                for pidx, (p0, ed) in enumerate(zip(points, edges)):
+                
+                    # we discard zero-length edges, but also vertical edges
+                    if all(ed[0:2] == 0.):
+                        continue
+                    
+                    if p0[2] >= dobj.center[2] and p0[2] <= dobj.center[2] + dobj.height:
+                    
+                        
+                        dp0 = dobj.center[0:2] - dobj.M.T[0][0:2] * dobj.width / 2. 
+                        dp1 = dobj.center[0:2] + dobj.M.T[0][0:2] * dobj.width / 2. 
+                    
+                        xx = seg_intersect(p0[0:2], (p0 + ed)[0:2], dp0, dp1)
+                        
+                        if numpy.linalg.norm((xx - dobj.center[0:2])) <= dobj.width / 2.:
+                            
+                            ponc = xx[0:2] - p0[0:2]
+                            u = numpy.dot(ponc, normalize(ed[0:2])) / numpy.linalg.norm(ed[0:2])
+                            
+                            if u > 1.: continue
+                            if u < 0.: continue
+                            
+                            if abs(u) < 0.01:
+                                
+                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 1],))
+                                last_break = pidx + 1
+                                previous_break_point = ()
+                                
+                            elif abs(1. - u) < 0.01:
+                            
+                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 2],))
+                                last_break = pidx + 2
+                                previous_break_point = ()
+                                
+                            else:
+                                
+                                pinter = p0 + ed * u
+                                
+                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 1], [pinter]))
+                                last_break = pidx + 1
+                                previous_break_point = ([pinter],)
+                                
+        yield numpy.concatenate(previous_break_point + (points[last_break:],))
+        
+    for N, rt in enumerate(yield_routes()):
+        
+        fn = "%s_%d.obj" % (id, N)
+        obj = open(fn, "w")
+        obj_c = 1
+        print('mtllib mtl.mtl\n', file=obj)
+        
+        segments = list(break_at_doors(rt))
+        segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
+        lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
+        
+        max_length = max(lens)
+        is_error = lambda l: l > LENGTH
+        
+        st = 'ERROR' if is_error(max_length) else 'NOTICE'
+                
+        desc = {
+            "status": st,
+            "maxLength": max_length,
+            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
+            "guid": rt[0].GlobalId
+        }            
+        results.append(desc)
+        
+        for spoints, sedges, slen in zip(segments, segment_edges, lens):
+            
+            clr = 'red' if is_error(slen) else 'green'
+            
+            li = []
+            upw = None   # tribool starts unknown ( not false, not true )      
+
+            for se in sedges[:-1]:
+                if all(se == 0.):
+                    continue
+                    
+                if upw != bool(se[2]):
+                    li.append([])
+                    upw = bool(se[2])
+                li[-1].append(se)
+
+            upw = [bool(x[0][2]) for x in li]
+             
+            horz = sum((y for x,y in zip(upw, li) if not x), [])
+            cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
+            crss = list(map(cross_z, horz))
+            crss.append(crss[-1])
+            avgs = [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
+                   
+            pt = spoints[0].copy()
+            avg_i = 0
+                       
+            for ii, (is_upw, es) in enumerate(zip(upw, li)):
+                for e in es:                
+                    dx = avgs[avg_i]
+                    
+                    if is_upw:
+                        dx2 = dx
+                    else:
+                        avg_i += 1
+                        dx2 = avgs[avg_i]
+                    
+                    face_pts = numpy.array([
+                        pt + dx  / 5.   ,
+                        pt + dx2 / 5. + e,
+                        pt - dx2 / 5. + e,
+                        pt - dx  / 5.   
+                    ])
+                    
+                    print('usemtl %s\n' % clr, file=obj)
+                    
+                    for p in face_pts:
+                        print("v", *p, file=obj)
+                        
+                    print("f", *range(obj_c, obj_c + 4), file=obj)
+                    
+                    obj_c += 4
+                           
+                    if WITH_MAYAVI:
+                        mlab.plot3d(*face_pts.T, color=(0,1,0), figure=ax_3d, tube_radius=0.03)                
+                    
+                    pt += e
+                
+    with open(id + ".json", "w") as f:
+        json.dump({
+            "id": id,
+            "results": results
+        }, f)
+
 
 if command == "doors":
     process_doors()
 elif command == "landings":
 	process_landings()
+elif command == "routes":
+	process_routes()
 
 try:
     for fn in glob.glob("*.obj"):
