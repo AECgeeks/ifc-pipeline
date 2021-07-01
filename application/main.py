@@ -99,7 +99,7 @@ def queue_task(task_name, *args):
         q.enqueue(fn, *args, **{'development':DEVELOPMENT})
 
 
-def process_upload(filewriter, callback_url=None):
+def process_upload(filewriter, callback_url=None, translation=None):
     id = utils.generate_id()
     d = utils.storage_dir_for_id(id)
     os.makedirs(d)
@@ -113,7 +113,7 @@ def process_upload(filewriter, callback_url=None):
     session.commit()
     session.close()
     
-    queue_task("process", id, callback_url)
+    queue_task("process", id, callback_url, translation)
     
     return id
     

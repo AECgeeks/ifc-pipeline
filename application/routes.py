@@ -1,6 +1,7 @@
 import os
 import io
 import gzip
+import json
 import shutil
 
 from flask import abort, jsonify, request, send_file
@@ -13,9 +14,9 @@ from main import application, process_upload, queue_task, DEVELOPMENT
 @application.route("/file", methods=['POST'])
 def accept_file_gzip():
     application.logger.debug("Request Headers %s", request.headers)
-
+    
     if request.headers['Content-Encoding'] != 'gzip':
-        abort(400)
+        abort(400)    
     
     file = io.BytesIO(request.data)
     gz = gzip.GzipFile(fileobj=file, mode='r')
@@ -26,8 +27,15 @@ def accept_file_gzip():
                 shutil.copyfileobj(gz, f)
             except OSError:
                 abort(400)
+                
+    translation = request.headers.get('translation')
+    if translation:
+        try:
+            translation = json.loads(translation)
+        except:
+            abort(400)
     
-    id = process_upload(process)
+    id = process_upload(process, translation=translation)
     return jsonify({
         "status": "ok",
         "id": id

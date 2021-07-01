@@ -192,9 +192,31 @@ class svg_generation_task(task):
         utils.store_file(id, "svg")
 
 
-def do_process(id):
+def do_process(id, translation=None):
     # @todo
     input_files = [utils.storage_file_for_id(id, "ifc")]
+    
+    if translation:
+        for f in input_files:
+            os.rename(f, f + ".old")
+            proc = subprocess.Popen([
+                sys.executable,
+            ], stdin=subprocess.PIPE)
+            proc.communicate(input=("""
+import ifcopenshell
+f = ifcopenshell.open('%(fn)s.old')
+s = f.by_type('IfcSite')[0]
+lp = f.createIfcLocalPlacement(
+    RelativePlacement = f.createIfcAxis2Placement3D(
+        Location=f.createIfcCartesianPoint((%(x)f, %(y)f, %(z)f))
+    )
+)
+s.ObjectPlacement.PlacementRelTo = lp
+# s.ObjectPlacement = lp
+f.write('%(fn)s')
+""" % {'fn':f, **translation}).encode('ascii'))
+            utils.store_file(id, "ifc")            
+    
     d = utils.storage_dir_for_id(id, output=True)
     if not os.path.exists(d):
         os.makedirs(d)
@@ -278,9 +300,9 @@ def do_process(id):
     set_progress(id, elapsed)
 
 
-def process(id, callback_url, **kwargs):
+def process(id, callback_url, translation=None, **kwargs):
     try:
-        do_process(id)
+        do_process(id, translation=translation)
         status = "success"
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
@@ -450,17 +472,38 @@ def calculate_volume(id, config, **kwargs):
         files = [utils.ensure_file(f, "ifc") for f in config['ids']]
         files = [('ifc', (fn, open(fn))) for fn in files]
         
+        plane_z = 0.0
+        
+        if len(files) == 1:
+            proc = subprocess.Popen([
+                sys.executable,
+            ], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            stdout, stderr = proc.communicate(input=("""
+import ifcopenshell
+from ifc_utils import get_unit
+f = ifcopenshell.open('%s')
+lu = get_unit(f, "LENGTHUNIT", 1.0)
+s = f.by_type('IfcSite')[0]
+if s.ObjectPlacement and s.ObjectPlacement.PlacementRelTo:
+    print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu)
+""" % files[0][1][0]).encode('ascii'))
+            r = stdout.strip()
+            if r:
+                plane_z = -float(r)
+                print("Using plane 0.0 0.0 1.0", plane_z)
+
+        
         command = """file = parse("*.ifc")
 all_surfaces = create_geometry(file)
 voxels = voxelize(all_surfaces)
 external = exterior(voxels)
 internal = invert(external)
-plane_surf = plane(internal, 0.0, 0.0, 1.0, 0.0)
+plane_surf = plane(internal, 0.0, 0.0, 1.0, %f)
 plane_voxels = voxelize(plane_surf)
 two_components = subtract(internal, plane_voxels)
 x = describe_components("components.json", two_components)
 y = json_stats("internal.json", {"internal"})
-"""
+""" % plane_z
 
         values = {'voxelfile': command}
         try:
