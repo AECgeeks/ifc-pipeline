@@ -40,7 +40,7 @@ import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element
 
-from ifc_utils import prefix_mapping
+from ifc_utils import get_unit
 
 normalize = lambda v: v / numpy.linalg.norm(v)
 
