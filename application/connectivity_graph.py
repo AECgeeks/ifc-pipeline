@@ -1390,6 +1390,7 @@ def process_routes():
             
             max_len = 0
             longest_path = None
+            longest_path_edges = None
             
             # for na, nb in itertools.product(nodes, exterior_nodes):
             
@@ -1397,6 +1398,7 @@ def process_routes():
                 
                 min_len_space = 1e9
                 shortest_path_space = None
+                shortest_path_space_edges = None
                 
                 for nb in exterior_nodes:
                     for path in nx.all_simple_paths(G.G, na, nb):
@@ -1407,14 +1409,17 @@ def process_routes():
                         if plen < min_len_space:
                             min_len_space = plen
                             shortest_path_space = points
+                            shortest_path_space_edges = edges
                         
                 if min_len_space > max_len:
                     max_len = min_len_space
                     longest_path = shortest_path_space
-                        
-            yield sp, space_nodes, path, points, edges
+                    longest_path_edges = shortest_path_space_edges
             
-            
+            if longest_path is not None and longest_path_edges is not None:
+                yield sp, space_nodes, None, longest_path, longest_path_edges
+
+
     def break_at_doors(tup):
         sp, nodes, path, points, edges = tup
         
