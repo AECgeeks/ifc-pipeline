@@ -747,6 +747,21 @@ def create_connectivity_graph():
 
 
     all_end_points = []
+    
+    f = plt.figure()
+    f.gca().hist(flow.flow.T[2], bins=64)
+    f.gca().set_yscale('log')
+    
+    clrs = plt.get_cmap("Dark2").colors
+    for storey_idx, (elev, (zmin, zmax, zmin_2, zmax_2)) in enumerate(zip(levels, ranges)):
+        f.gca().axvline(zmin_2 + flow.spacing * 2 + 1.e-3, ls='--', color=clrs[storey_idx % len(clrs)])
+        f.gca().axvline(zmax_2 - flow.spacing * 2 + 1.e-3, ls='--', color=clrs[storey_idx % len(clrs)])
+        if numpy.any((numpy.array(elevations) - (elev - flow.spacing)) < 0.01):
+            f.gca().axvline(elev, color=clrs[storey_idx % len(clrs)])
+            f.gca().text(elev, f.gca().get_ylim()[0], "%.3f" % elev)
+            
+    
+    f.savefig("z_histogram.png", dpi=300)
         
     for storey_idx, (elev, (zmin, zmax, zmin_2, zmax_2)) in enumerate(zip(levels, ranges)):
         
