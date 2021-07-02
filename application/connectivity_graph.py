@@ -39,6 +39,7 @@ if WITH_MAYAVI:
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 
 from ifc_utils import get_unit
 
@@ -241,8 +242,18 @@ inf = float("inf")
 
 fs = list(map(ifcopenshell.open, fns))
 lu = get_unit(fs[0], "LENGTHUNIT", 1.0)
+s = fs[0].by_type('IfcSite')[0]
+z_offset = 0.
+if s.ObjectPlacement and s.ObjectPlacement.PlacementRelTo:
+    z_offset = s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu
+    print("z_offset", z_offset)
 storeys = sum(map(lambda f: f.by_type("IfcBuildingStorey"), fs), [])
-elevations = list(map(lambda s: lu * getattr(s, 'Elevation', 0.), storeys))
+# elevations = list(map(lambda s: (lu * getattr(s, 'Elevation', 0.)) + z_offset, storeys))
+def get_elevation_from_placement(s):
+    return ifcopenshell.util.placement.get_local_placement(
+        s.ObjectPlacement
+    )[2,3] * lu
+elevations = list(map(get_elevation_from_placement, storeys))
 storey_by_elevation = dict(zip(elevations, storeys))
 elevations = sorted(set(elevations))
 elevations_2 = list(elevations)
