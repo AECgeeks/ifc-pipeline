@@ -34,6 +34,7 @@ import subprocess
 import tempfile
 import operator
 import shutil
+import functools
 
 from collections import defaultdict
 
@@ -608,14 +609,14 @@ def process_3_4(args, context):
     
     utils.store_file(context.id, "json")
     
-def make_script_3_26(args):
+def make_script_3_26(entity, args):
     h = args['height']
     h = int(h / 0.05)
     
     basis_old = """file = parse("*.ifc")
 all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
 voxels = voxelize(all_surfaces)
-stairs = create_geometry(file, include={"IfcStair"})
+stairs = create_geometry(file, include={"%s"})
 stair_ids_region = voxelize(stairs, type="uint", method="surface")
 stair_ids_empty = constant_like(voxels, 0, type="uint")
 stair_ids = union(stair_ids_region, stair_ids_empty)
@@ -639,7 +640,7 @@ valid = greater_than(cnt, %d)
 invalid = less_than(cnt, %d)
 x = mesh(valid, "valid.obj", groups=stair_ids_offset)
 x = mesh(invalid, "invalid.obj", groups=stair_ids_offset)
-""" % (h, h + 1)
+""" % (entity, h, h + 1)
 
     basis = """function get_reachability(file)
 
@@ -669,7 +670,7 @@ file = parse("*.ifc")
 all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
 voxels = voxelize(all_surfaces)
 
-stairs = create_geometry(file, include={"IfcStair"})
+stairs = create_geometry(file, include={"%s"})
 stair_ids_region = voxelize(stairs, type="uint", method="surface")
 stair_ids_empty = constant_like(voxels, 0, type="uint")
 stair_ids = union(stair_ids_region, stair_ids_empty)
@@ -701,11 +702,11 @@ invalid = less_than(cnt, %d)
 
 mesh(valid, "valid.obj", groups=stair_ids_offset)
 mesh(invalid, "invalid.obj", groups=stair_ids_offset)
-""" % (h, h + 1)
+""" % (entity, h, h + 1)
 
     return basis
 
-def process_3_26(args, context):
+def process_3_26(entity, args, context):
     import ifcopenshell
     
     stair_guid_mapping = {}
@@ -713,7 +714,7 @@ def process_3_26(args, context):
     
     for fn in context.files:
         f = ifcopenshell.open(fn)
-        for st in f.by_type("IfcStair"):
+        for st in f.by_type(entity):
             stair_guid_mapping[st.id()] = st.GlobalId
             stair_to_children[st.GlobalId].append(st.id())
             
@@ -1087,8 +1088,25 @@ def stair_headroom(id, config, **kwargs):
         abort(400)
         
     process_voxel_check(
-        make_script_3_26,
-        process_3_26,
+        functools.partial(make_script_3_26, "IfcStair"),
+        functools.partial(process_3_26, "IfcStair"),
+        {'height': height},
+        id,
+        config['ids'],
+        **kwargs)
+
+
+def ramp_headroom(id, config, **kwargs):
+    height = config.get('height', 2.2)
+    
+    try:
+        height = float(height)
+    except:
+        abort(400)
+        
+    process_voxel_check(
+        functools.partial(make_script_3_26, "IfcRamp"),
+        functools.partial(process_3_26, "IfcRamp"),
         {'height': height},
         id,
         config['ids'],
