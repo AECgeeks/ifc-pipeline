@@ -920,6 +920,8 @@ def create_connectivity_graph():
                     bbb = [(bb[i], bb[i+1]) for i in range(0, len(bb), 2)]
                     for st_, en_ in bbb:
                     
+                        if st_ == en_: continue
+                    
                         # import pdb; pdb.set_trace()
                     
                         if st_ != 0:
@@ -953,8 +955,8 @@ def create_connectivity_graph():
                         else:
                             ENN = e
                             
-                        if len(ps[st_:en_+1]) == 0:
-                            import pdb; pdb.set_trace()
+                        # if len(ps[st_:en_+1]) == 0:
+                        #     import pdb; pdb.set_trace()
                             
                         edges_to_add.append(((STN,ENN), {"pts": ps[st_:en_+1]}))
                     
@@ -976,8 +978,8 @@ def create_connectivity_graph():
             for ab, kwargs in edges_to_add:
                 st_pos = graph.nodes[ab[0]]['o']
                 en_pos = graph.nodes[ab[1]]['o']
-                if numpy.all(st_pos == en_pos):
-                    import pdb; pdb.set_trace()
+                # if not numpy.all(st_pos == en_pos):
+                #     import pdb; pdb.set_trace()
                     
                 graph.add_edge(*ab, **kwargs)
             graph.remove_nodes_from(list(nx.isolates(graph)))
