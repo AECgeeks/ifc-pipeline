@@ -779,7 +779,7 @@ def create_connectivity_graph():
             x, y, arr, heights = flow.get_mean(flow_mi_ma)
             
             fn = "section-%05d-%05d-%05d.png" % (elev * 1000, zmin * 1000, zmax * 1000)
-            fig = plt.figure(figsize=((x.max() - x.min()), (y.max() - y.min())))
+            fig = plt.figure(figsize=((y.data.max() - y.data.min()), (x.data.max() - x.data.min())))
             axx = fig.add_subplot(111)
             
             # print("x", x.min(), x.data.min())
