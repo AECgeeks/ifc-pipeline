@@ -1534,88 +1534,94 @@ def process_routes():
     for N, rt in enumerate(yield_routes()):
         
         fn = "%s_%d.obj" % (id, N)
-        obj = open(fn, "w")
         obj_c = 1
-        print('mtllib mtl.mtl\n', file=obj)
-        
-        segments = list(break_at_doors(rt))
-        segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
-        lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
-        
-        max_length = max(lens)
-        is_error = lambda l: l > LENGTH
-        
-        st = 'ERROR' if is_error(max_length) else 'NOTICE'
+        with open(fn, "w") as obj:
+            
+            print('mtllib mtl.mtl\n', file=obj)
+            
+            segments = list(break_at_doors(rt))
+            segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
+            lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
+            
+            max_length = max(lens)
+            is_error = lambda l: l > LENGTH
+            
+            st = 'ERROR' if is_error(max_length) else 'NOTICE'
+                    
+            desc = {
+                "status": st,
+                "maxLength": max_length,
+                "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
+                "guid": rt[0].GlobalId
+            }            
+            results.append(desc)
+            
+            for spoints, sedges, slen in zip(segments, segment_edges, lens):
+            
+                clr = 'red' if is_error(slen) else 'green'
                 
-        desc = {
-            "status": st,
-            "maxLength": max_length,
-            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
-            "guid": rt[0].GlobalId
-        }            
-        results.append(desc)
-        
-        for spoints, sedges, slen in zip(segments, segment_edges, lens):
-        
-            clr = 'red' if is_error(slen) else 'green'
-            
-            li = []
-            upw = None   # tribool starts unknown ( not false, not true )      
+                li = []
+                upw = None   # tribool starts unknown ( not false, not true )      
 
-            for se in sedges[:-1]:
-                if all(se == 0.):
-                    continue
-                    
-                if upw != bool(se[2]):
-                    li.append([])
-                    upw = bool(se[2])
-                li[-1].append(se)
-
-            upw = [bool(x[0][2]) for x in li]
-             
-            horz = sum((y for x,y in zip(upw, li) if not x), [])
-            
-            if len(horz) == 0:
-                continue
-            
-            cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
-            crss = list(map(cross_z, horz))
-            crss.append(crss[-1])
-            avgs = [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
-                   
-            pt = spoints[0].copy()
-            avg_i = 0
-                       
-            for ii, (is_upw, es) in enumerate(zip(upw, li)):
-                for e in es:                
-                    dx = avgs[avg_i]
-                    
-                    if is_upw:
-                        dx2 = dx
-                    else:
-                        avg_i += 1
-                        dx2 = avgs[avg_i]
-                    
-                    face_pts = numpy.array([
-                        pt + dx  / 5.   ,
-                        pt + dx2 / 5. + e,
-                        pt - dx2 / 5. + e,
-                        pt - dx  / 5.   
-                    ])
-                    
-                    print('usemtl %s\n' % clr, file=obj)
-                    
-                    for p in face_pts:
-                        print("v", *p, file=obj)
+                for se in sedges[:-1]:
+                    if all(se == 0.):
+                        continue
                         
-                    print("f", *range(obj_c, obj_c + 4), file=obj)
-                    
-                    obj_c += 4
+                    if upw != bool(se[2]):
+                        li.append([])
+                        upw = bool(se[2])
+                    li[-1].append(se)
+
+                upw = [bool(x[0][2]) for x in li]
+                 
+                horz = sum((y for x,y in zip(upw, li) if not x), [])
+                
+                if len(horz) == 0:
+                    continue
+                
+                cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
+                crss = list(map(cross_z, horz))
+                crss.append(crss[-1])
+                # there can be nans as averaging opposite vectors gives a
+                # zero vector, normalize gives nan. It's not clear why
+                # opposite vectors are present in the edges.
+                avgs = numpy.nan_to_num(
+                    [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
+                )
+                       
+                pt = spoints[0].copy()
+                avg_i = 0
                            
-                    if WITH_MAYAVI:
-                        mlab.plot3d(*face_pts.T, color=(0,1,0), figure=ax_3d, tube_radius=0.03)                
-                    
-                    pt += e
+                for ii, (is_upw, es) in enumerate(zip(upw, li)):
+                    for e in es:                
+                        dx = avgs[avg_i]
+                        
+                        if is_upw:
+                            dx2 = dx
+                        else:
+                            avg_i += 1
+                            dx2 = avgs[avg_i]
+                        
+                        face_pts = numpy.array([
+                            pt + dx  / 5.   ,
+                            pt + dx2 / 5. + e,
+                            pt - dx2 / 5. + e,
+                            pt - dx  / 5.   
+                        ])
+                        
+                        print('usemtl %s\n' % clr, file=obj)
+                        
+                        for p in face_pts:
+                            print("v", *p, file=obj)
+                            
+                        print("f", *range(obj_c, obj_c + 4), file=obj)
+                        
+                        obj_c += 4
+                               
+                        if WITH_MAYAVI:
+                            mlab.plot3d(*face_pts.T, color=(0,1,0), figure=ax_3d, tube_radius=0.03)                
+                        
+                        pt += e
                 
     with open(id + ".json", "w") as f:
         json.dump({
