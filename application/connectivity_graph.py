@@ -1259,121 +1259,144 @@ def process_landings():
         
     results = []
                             
-    for N, path in enumerate(yield_stair_paths()):
+    N = -1
     
-        # import pdb; pdb.set_trace()
+    for path in yield_stair_paths():
+
+        # get the lowest elevation of a node in the graph for use later on
+        def get_height_map_min(lv):
+            hm = lv.height_map
+            return hm[hm != hm.min()].min()
+
+        levels = set(G.G.nodes[n]['level'] for n in G.G.nodes)
+        global_min_z = min(map(get_height_map_min, levels))
+        ##################################################################
     
-        fn = "%s_%d.obj" % (id, N)
-        obj = open(fn, "w")
-        obj_c = 1
-        
         points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
         edges = numpy.roll(points, shift=-1, axis=0) - points
-        incls = numpy.where(edges[:-1, 2] != 0.)[0]
-        stair = points[max(incls.min() - 1, 0):incls.max() + 3]
-        sedges = numpy.roll(stair, shift=-1, axis=0) - stair
         
-        # Find relating element by bounding box search, not very robust,
-        # awaiting change to IfcOpenShell to use exact distance
-        c = Counter()
-        for p in points:
-            lower = p - (0.1,0.1,0.5)
-            upper = p + (0.1,0.1,0.1)
-            box = (tuple(map(float, lower)), tuple(map(float, upper)))
-            for inst in tree.select_box(box):
-                if not inst.is_a("IfcSpace"):
-                    if inst.Decomposes:
-                        inst = inst.Decomposes[0].RelatingObject
-                    c.update([inst])
-        ifc_elem = c.most_common(1)[0][0]
-                
-        # tree.select((1.,1.,1.), extend=0.5)        
-
-        li = []
-        upw = None   # tribool starts unknown ( not false, not true )      
-
-        for se in sedges[:-1]:
-            if all(se == 0.):
-                continue
-                
-            if upw != bool(se[2]):
-                li.append([])
-                upw = bool(se[2])
-            li[-1].append(se)
-
-        upw = [bool(x[0][2]) for x in li]
-        lens = [ sum(numpy.linalg.norm(e) for e in es) for es in li ]
+        edges_not_at_start = numpy.array(
+            [e for e,p in zip(edges[:-1], points[:-1]) if p[2] != global_min_z]
+        )
+        max_incl = numpy.array(edges_not_at_start)[:, 2].max()
         
-        num_landings = 0
+        if abs(max_incl - flow.spacing) < 1.e-9:
+            # this is a ramp. no inclination beyond spacing
+            # we have to discard the global elevation min value
+            # though because we often see a jump there
+            continue
         
-        for is_upw, ll in zip(upw, lens):
-            if is_upw is False and ll > LENGTH:
-                num_landings += 1
-                
-        clr = 'red' if num_landings == 0 else 'green'
-        st = 'ERROR' if num_landings == 0 else 'NOTICE'
-                
-        desc = {
-            "status": st,
-            "numLandings": num_landings,
-            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
-            "guid": ifc_elem.GlobalId
-        }            
-        results.append(desc)
+        N += 1
         
-        print('mtllib mtl.mtl\n', file=obj)
+        fn = "%s_%d.obj" % (id, N)
+        obj_c = 1
+        with open(fn, "w") as obj:
         
-        # import pdb; pdb.set_trace()
-        
-        horz = sum((y for x,y in zip(upw, li) if not x), [])
-        cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
-        crss = list(map(cross_z, horz))
-        crss.append(crss[-1])
-        avgs = [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
-               
-        pt = stair[0].copy()
-        avg_i = 0
-        for ii, (is_upw, es, ll) in enumerate(zip(upw, li, lens)):
-            d = ii + 1 if ii == 0 else ii - 1
-            ref = li[d][0]
-            for e in es:                
-                args = [ref, e]
-                
-                if is_upw:
-                    args = args[::-1]
+            incls = numpy.where(edges[:-1, 2] != 0.)[0]
+            stair = points[max(incls.min() - 1, 0):incls.max() + 3]
+            sedges = numpy.roll(stair, shift=-1, axis=0) - stair
+            
+            # Find relating element by bounding box search, not very robust,
+            # awaiting change to IfcOpenShell to use exact distance
+            c = Counter()
+            for p in points:
+                lower = p - (0.1,0.1,0.5)
+                upper = p + (0.1,0.1,0.1)
+                box = (tuple(map(float, lower)), tuple(map(float, upper)))
+                for inst in tree.select_box(box):
+                    if not inst.is_a("IfcSpace"):
+                        if inst.Decomposes:
+                            inst = inst.Decomposes[0].RelatingObject
+                        c.update([inst])
+            ifc_elem = c.most_common(1)[0][0]
                     
+            # tree.select((1.,1.,1.), extend=0.5)        
+
+            li = []
+            upw = None   # tribool starts unknown ( not false, not true )      
+
+            for se in sedges[:-1]:
+                if all(se == 0.):
+                    continue
                     
-                # dx = normalize(numpy.cross(*map(normalize, args))) * 0.5
-                dx = avgs[avg_i]
-                if is_upw:
-                    dx2 = dx
-                else:
-                    avg_i += 1
-                    dx2 = avgs[avg_i]
-                
-                face_pts = numpy.array([
-                    pt + dx  / 5.   ,
-                    pt + dx2 / 5. + e,
-                    pt - dx2 / 5. + e,
-                    pt - dx  / 5.   
-                ])
-                
-                print('usemtl %s%s\n' % (clr, "" if ll > LENGTH else "2"), file=obj)
-                
-                for p in face_pts:
-                    print("v", *p, file=obj)
+                if upw != bool(se[2]):
+                    li.append([])
+                    upw = bool(se[2])
+                li[-1].append(se)
+
+            upw = [bool(x[0][2]) for x in li]
+            lens = [ sum(numpy.linalg.norm(e) for e in es) for es in li ]
+            
+            num_landings = 0
+            
+            for is_upw, ll in zip(upw, lens):
+                if is_upw is False and ll > LENGTH:
+                    num_landings += 1
                     
-                print("f", *range(obj_c, obj_c + 4), file=obj)
-                
-                obj_c += 4
-                       
-                if WITH_MAYAVI:
-                    mlab.plot3d(*face_pts.T, color=(0,1,0), figure=ax_3d, tube_radius=0.03)                
-                
-                pt += e
-       
-        if WITH_MAYAVI:
-            mlab.plot3d(*stair.T, color=(0,1,0), figure=ax_3d, tube_radius=0.06)
+            clr = 'red' if num_landings == 0 else 'green'
+            st = 'ERROR' if num_landings == 0 else 'NOTICE'
+                    
+            desc = {
+                "status": st,
+                "numLandings": num_landings,
+                "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
+                "guid": ifc_elem.GlobalId
+            }            
+            results.append(desc)
+            
+            print('mtllib mtl.mtl\n', file=obj)
+            
+            # import pdb; pdb.set_trace()
+            
+            horz = sum((y for x,y in zip(upw, li) if not x), [])
+            cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
+            crss = list(map(cross_z, horz))
+            crss.append(crss[-1])
+            avgs = [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
+                   
+            pt = stair[0].copy()
+            avg_i = 0
+            for ii, (is_upw, es, ll) in enumerate(zip(upw, li, lens)):
+                d = ii + 1 if ii == 0 else ii - 1
+                ref = li[d][0]
+                for e in es:                
+                    args = [ref, e]
+                    
+                    if is_upw:
+                        args = args[::-1]
+                        
+                        
+                    # dx = normalize(numpy.cross(*map(normalize, args))) * 0.5
+                    dx = avgs[avg_i]
+                    if is_upw:
+                        dx2 = dx
+                    else:
+                        avg_i += 1
+                        dx2 = avgs[avg_i]
+                    
+                    face_pts = numpy.array([
+                        pt + dx  / 5.   ,
+                        pt + dx2 / 5. + e,
+                        pt - dx2 / 5. + e,
+                        pt - dx  / 5.   
+                    ])
+                    
+                    print('usemtl %s%s\n' % (clr, "" if ll > LENGTH else "2"), file=obj)
+                    
+                    for p in face_pts:
+                        print("v", *p, file=obj)
+                        
+                    print("f", *range(obj_c, obj_c + 4), file=obj)
+                    
+                    obj_c += 4
+                           
+                    if WITH_MAYAVI:
+                        mlab.plot3d(*face_pts.T, color=(0,1,0), figure=ax_3d, tube_radius=0.03)                
+                    
+                    pt += e
+           
+            if WITH_MAYAVI:
+                mlab.plot3d(*stair.T, color=(0,1,0), figure=ax_3d, tube_radius=0.06)
     
     with open(id + ".json", "w") as f:
         json.dump({
