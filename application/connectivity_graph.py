@@ -337,6 +337,7 @@ def process_doors():
     result_mapping = {}
 
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
+    doors = [d for d in doors if d.Representation]
     shapes = list(map(create_shape, doors))
     objs = list(map(ifc_element, doors, shapes))
     
