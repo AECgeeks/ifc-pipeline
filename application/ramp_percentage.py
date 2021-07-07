@@ -97,7 +97,8 @@ for N, ramp in enumerate(ramps):
     
     up_face, up_normal = nf_pairs[0]
     
-    percentage = math.tan(math.acos(up_normal.Z())) * 100.
+    print(up_normal.X(), up_normal.Y(), up_normal.Z())
+    percentage = math.tan(math.acos(min(1.0, up_normal.Z()))) * 100.
     
     if abs(percentage) < 0.01:
         continue
