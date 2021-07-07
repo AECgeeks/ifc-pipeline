@@ -1105,6 +1105,33 @@ def ramp_headroom(id, config, **kwargs):
         height = float(height)
     except:
         abort(400)
+
+    files = [utils.ensure_file(f, "ifc") for f in config['ids']]
+    d = utils.storage_dir_for_id(id, output=True)
+    
+    def has_ramps(fn):
+        proc = subprocess.Popen([
+            sys.executable,
+        ], stdin=subprocess.PIPE)
+        proc.communicate(input=("""
+import ifcopenshell
+f = ifcopenshell.open('%s')
+exit(1 if len(f.by_type('IfcRamp')) == 0 else 0)
+""" % fn).encode('ascii'))
+        return proc.returncode == 0
+        
+    if not any(map(has_ramps, files)):
+        try: os.makedirs(d)
+        except: pass
+        with open(os.path.join(d, id + '.json'), 'w') as f:
+            json.dump({
+                'id': id,
+                'results': []
+            }, f)
+        utils.store_file(id, "json")
+        set_progress(id, 100)
+        return
+
         
     process_voxel_check(
         functools.partial(make_script_3_26, "IfcRamp"),
