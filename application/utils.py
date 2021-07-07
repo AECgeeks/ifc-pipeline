@@ -80,7 +80,8 @@ def store_file(id, ext):
         client.fput_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
         print("store", id, ext)
     else:
-        print("not storing", id, ext)
+        # print("not storing", id, ext)
+        pass
 
             
 def validate_id(id):
