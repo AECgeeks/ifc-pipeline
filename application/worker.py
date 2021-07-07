@@ -748,7 +748,9 @@ def process_3_26(entity, args, context):
                 else:
                     ls.insert(1, "usemtl green\n")
                 f.seek(0)
-                f.writelines(ls)
+                f.truncate()
+                # strip empty faces
+                f.writelines([l for l in ls if not l.startswith("f") or len(l.split(" ")) > 2])
             
             yield fn2
         
