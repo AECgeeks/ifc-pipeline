@@ -1090,28 +1090,29 @@ def create_connectivity_graph():
                 b_pts = b_pts[::-1]
 
 
-            da = a_pts[0] - a_pts[5]
-            db = b_pts[0] - b_pts[5]
+            if len(a_pts) >= 6 and len(b_pts) >= 6:
+                da = a_pts[0] - a_pts[5]
+                db = b_pts[0] - b_pts[5]
 
-            a0 = a_pts[0]
-            a1 = a0 + da
+                a0 = a_pts[0]
+                a1 = a0 + da
 
-            b0 = b_pts[0]
-            b1 = b0 + db
+                b0 = b_pts[0]
+                b1 = b0 + db
 
-            if abs(normalize(da).dot(normalize(db))) < 0.5:
-                
-                xx = numpy.int_(seg_intersect(a0, a1, b0, b1))
-                
-                return numpy.concatenate((
-                    numpy.array(list(bresenham(*a_pt, *xx))),
-                    numpy.array(list(bresenham(*xx, *b_pt)))
-                ))
+                if abs(normalize(da).dot(normalize(db))) < 0.5:
+                    
+                    xx = numpy.int_(seg_intersect(a0, a1, b0, b1))
+                    
+                    return numpy.concatenate((
+                        numpy.array(list(bresenham(*a_pt, *xx))),
+                        numpy.array(list(bresenham(*xx, *b_pt)))
+                    ))
 
         return numpy.array(list(bresenham(*a_pt, *b_pt)))
         
-    for p in all_end_points:
-        print(p)
+    # for p in all_end_points:
+    #     print(p)
             
     for a, b in itertools.combinations(all_end_points, 2):        
     
