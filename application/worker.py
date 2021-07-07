@@ -550,10 +550,16 @@ y = json_stats("internal.json", {"internal"})
             
             counts = list(map(to_volume, map(float, map(operator.itemgetter('count'), sorted(components, key=get_z_min)))))
             
+            if len(counts) == 2:
+                under, above = counts
+            else:
+                under = 0.
+                above = sum(counts)
+            
             with open(os.path.join(d, id + ".json"), 'w') as f:
                 json.dump({
-                    'under_ground': counts[0],
-                    'above_ground': counts[1]
+                    'under_ground': under,
+                    'above_ground': above
                 }, f)
             
         except:
