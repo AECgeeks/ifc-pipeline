@@ -31,9 +31,11 @@ from skimage.morphology import skeletonize
 
 from bresenham import bresenham
 
-WITH_MAYAVI = False
+WITH_MAYAVI = True
 if WITH_MAYAVI:
     from mayavi import mlab
+    ax_3d = mlab.figure(size=(1600, 1200))
+
 # mlab.options.offscreen = True
 
 import ifcopenshell
@@ -265,6 +267,9 @@ tree_settings = ifcopenshell.geom.settings(
     DISABLE_OPENING_SUBTRACTIONS=True
 )
 tree = ifcopenshell.geom.tree()
+# @todo speed up
+# it = ifcopenshell.geom.iterator(tree_settings, fs[0], include=["IfcSpace"])
+# tree.add_iterator(it)
 for f in fs:
     tree.add_file(f, tree_settings)
 
@@ -337,7 +342,6 @@ def process_doors():
     result_mapping = {}
 
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
-    doors = [d for d in doors if d.Representation]
     shapes = list(map(create_shape, doors))
     objs = list(map(ifc_element, doors, shapes))
     
@@ -511,6 +515,10 @@ def process_doors():
         }, f)
 
 
+def process_risers():
+    import pdb; pdb.set_trace()
+
+
 class connectivity_graph:
 
     def __init__(self, G):
@@ -564,12 +572,12 @@ class connectivity_graph:
         return getattr(self.G, k)
         
     def draw_nodes(self, node_colouring=None):
-        end_point_ids = {p.node_id for p in all_end_points}
         
         nodes = self.G.nodes()
         sorted_nodes = sorted(map(int, nodes))
         
         if node_colouring is None:
+            end_point_ids = {p.node_id for p in all_end_points}
             end_point_mask = numpy.array([x in end_point_ids for x in sorted_nodes])
         else:
             end_point_mask = numpy.array([x in node_colouring for x in sorted_nodes])
@@ -582,8 +590,8 @@ class connectivity_graph:
         dz = numpy.zeros((len(nodes),))
         
         flow_dist = numpy.zeros((len(nodes),))
-        for p in all_end_points:
-            flow_dist[p.node_id] = flow.lookup(get_node_xyz(self.G)(p))
+        for p in sorted_nodes:
+            flow_dist[p] = flow.lookup(self.get_node_xyz(p))
 
         for L in set(levels):
             mask = numpy.array([L == l for l in levels])
@@ -601,17 +609,19 @@ class connectivity_graph:
             mlab.text3d(*xy, z, s, figure=ax_3d, scale=0.05)
             
     def draw_edges(self):
-        for s,e in self.G.edges():
-            attrs = self.G[s][e]
-            ps = attrs['pts']
-            LD = attrs['level']
-            dz = LD.height_map[tuple(ps.T)]
-            ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
-            ps_3d = numpy.column_stack((ps2, dz))
-            ps3 = ps_3d
-            if dz.max() - dz.min() > 1.e-5:
-                ps3 = stair_case(ps3)
-            mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
+        for comp in nx.connected_components(self.G):
+            if len(comp) < 3: continue
+            for s,e in self.G.subgraph(comp).edges():
+                attrs = self.G[s][e]
+                ps = attrs['pts']
+                LD = attrs['level']
+                dz = LD.height_map[tuple(ps.T)]
+                ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
+                ps_3d = numpy.column_stack((ps2, dz))
+                ps3 = ps_3d
+                if dz.max() - dz.min() > 1.e-5:
+                    ps3 = stair_case(ps3)
+                mlab.plot3d(*ps3.T, color=(1,1,1), tube_radius=None, figure=ax_3d)
 
                             
 def path_to_edges(p):
@@ -659,9 +669,6 @@ def stair_case(points):
     
 
 def create_connectivity_graph():
-
-    if WITH_MAYAVI:
-        ax_3d = mlab.figure(size=(1600, 1200))
 
     levels = list(elevations)
 
@@ -862,6 +869,12 @@ def create_connectivity_graph():
             
             # retry again trimming to zmin, zmax
             
+            # remove small components
+            # for component in list(nx.connected_components(graph)):
+            #     if len(component) < 3:
+            #         for node in component:
+            #             graph.remove_node(node)
+            
             nodes_to_add = []
             edges_to_add = []
             edges_to_remove = []
@@ -972,6 +985,9 @@ def create_connectivity_graph():
                     # else:
                     #     import pdb; pdb.set_trace()
                     #     edges_to_remove.append((s, e))
+                    
+            print("removing", len(edges_to_remove), "edges, adding", len(edges_to_add))
+            print("found", len(end_points), "end points")
                     
             graph.remove_edges_from(edges_to_remove)
             for n, kwargs in nodes_to_add:
@@ -1143,7 +1159,11 @@ def create_connectivity_graph():
             
             flow_diff = abs(fa - fb) * flow.spacing / 10. # voxec stores floats as int(v * 10)
             
-            if abs(flow_diff - euclid_dist) / euclid_dist < 0.15:
+            print("considering ", *xyza, "->", *xyzb, "values", fa, fb)
+            print("flow ratio", abs(flow_diff - euclid_dist) / euclid_dist)
+            
+            if abs(flow_diff - euclid_dist) / euclid_dist < 0.25:
+                print("flow difference ok")
                 na = complete_graph.nodes[a.node_id]
                 nb = complete_graph.nodes[b.node_id]
                 
@@ -1155,6 +1175,7 @@ def create_connectivity_graph():
                                 
                 # when we cross masked values we know we're connecting wrong points
                 if not numpy.any(heights.mask[tuple(pts.T)]):
+                    print("height mask ok")
                     complete_graph.add_edge(a.node_id, b.node_id, pts=pts, level=LD)
                     
                     
@@ -1638,6 +1659,8 @@ elif command == "landings":
 	process_landings()
 elif command == "routes":
 	process_routes()
+elif command == "risers":
+	process_risers()
 
 try:
     for fn in glob.glob("*.obj"):
