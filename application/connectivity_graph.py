@@ -31,7 +31,7 @@ from skimage.morphology import skeletonize
 
 from bresenham import bresenham
 
-WITH_MAYAVI = True
+WITH_MAYAVI = False
 if WITH_MAYAVI:
     from mayavi import mlab
     ax_3d = mlab.figure(size=(1600, 1200))
