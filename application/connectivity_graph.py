@@ -93,9 +93,9 @@ class ifc_element:
         self.geom = geom
         
         self.width, self.height = None, None
-        if hasattr(inst, "OverallWidth"):
+        if hasattr(inst, "OverallWidth") and inst.OverallWidth is not None:
             self.width = inst.OverallWidth * lu
-        if hasattr(inst, "OverallHeight"):
+        if hasattr(inst, "OverallHeight") and inst.OverallHeight is not None:
             self.height = inst.OverallHeight * lu
         
         if self.geom is None:
