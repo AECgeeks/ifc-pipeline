@@ -63,7 +63,6 @@ def to_tuple(xyz):
     return (xyz.X(), xyz.Y()) + ((xyz.Z(),) if hasattr(xyz, "Z") else ())
 
 
-print(*enumerate(sys.argv))
 id = sys.argv[1]
 width = float(sys.argv[2])
 depth = float(sys.argv[3])
