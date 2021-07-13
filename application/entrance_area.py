@@ -129,8 +129,16 @@ for N, door in enumerate(external_doors):
     
     dxdydz = tuple(map(float, dims[0:3]))
     
-    box = OCC.Core.BRepPrimAPI.BRepPrimAPI_MakeBox(
-        ax, *dxdydz).Solid()
+    bounds_diff = bounds[1] - bounds[0]
+    if numpy.count_nonzero(bounds_diff >= 0.5) < 2 or bounds_diff[2] <= 0.5:
+        # quick check to remove small doors, or misclassified doors
+        continue
+    
+    try:
+        box = OCC.Core.BRepPrimAPI.BRepPrimAPI_MakeBox(
+            ax, *dxdydz).Solid()
+    except:
+        continue
         
     valid = len(set(i.is_a() for i in tree.select(box)) - {'IfcOpeningElement', 'IfcSpace'}) == 0
                 
