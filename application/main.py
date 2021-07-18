@@ -128,7 +128,7 @@ def process_upload_multiple(files, callback_url=None):
         filewriter = lambda fn: file.save(fn)
         filewriter(os.path.join(d, id+"_"+str(file_id)+".ifc"))
         file_id += 1
-        m.files.append(database.file(id, ''))
+        # m.files.append(database.file(id, ''))
     
     session.commit()
     session.close()
