@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy
+import skimage
 from numpy.ma import masked_array
 import matplotlib
 from matplotlib import pyplot as plt
@@ -1187,17 +1188,17 @@ def create_connectivity_graph():
 
                 if abs(normalize(da).dot(normalize(db))) < 0.5:
                     
-                    xx = numpy.int_(seg_intersect(a0, a1, b0, b1))
+                    xx = seg_intersect(a0, a1, b0, b1)
                     
                     return numpy.concatenate((
-                        numpy.array(list(bresenham(*a_pt, *xx))),
-                        numpy.array(list(bresenham(*xx, *b_pt)))
+                        numpy.array(list(bresenham(*numpy.int_(a_pt), *numpy.int_(xx)))),
+                        numpy.array(list(bresenham(*numpy.int_(xx), *numpy.int_(b_pt))))
                     ))
 
-        return numpy.array(list(bresenham(*a_pt, *b_pt)))
+        return numpy.array(list(bresenham(*numpy.int_(a_pt), *numpy.int_(b_pt))))
         
-    # for p in all_end_points:
-    #     print(p)
+    for p in all_end_points:
+        print(p, get_node_xyz(complete_graph)(p))
             
     for a, b in itertools.combinations(all_end_points, 2):        
     
@@ -1309,24 +1310,27 @@ def process_landings():
     
     nzs = list(map(G.get_node_z, G.nodes))
 
-    ifc_storeys = numpy.zeros((len(G.nodes),), dtype=int) - 1
+    node_to_ifc_storey = {}
 
     elevations_covered = numpy.zeros((len(elevations),), dtype=bool)
 
+    # Assign the most frequent Z coords to storeys
+    # A storey is assigned at most 1 Z coord (elevations_covered)
     for zz, cnt in Counter(nzs).most_common():
         i = bisect.bisect(elevations, zz) - 1
         if not elevations_covered[i]:
             elevations_covered[i] = True
             for nidx, nz in zip(G.nodes, nzs):
                 if nz == zz:
-                    ifc_storeys[nidx] = i
+                    node_to_ifc_storey[nidx] = i
                     
-    node_to_ifc_storey = dict(filter(
-        lambda t: t[1] != -1, 
-        enumerate(ifc_storeys)
-    ))
+    # node_to_ifc_storey = dict(filter(
+    #     lambda t: t[1] != -1, 
+    #     enumerate(ifc_storeys)
+    # ))
                     
     edge_dzs = list(map(G.get_edge_dz, G.edges))
+    # Nodes (by summing edges) that are part of a edge with dZ != 0
     ndz = sum(map(
         operator.itemgetter(1), 
         filter(lambda t: t[0] != 0., zip(edge_dzs, G.edges))
@@ -1335,17 +1339,25 @@ def process_landings():
     stair_points = node_to_ifc_storey.keys() & ndz
     
     if WITH_MAYAVI:
-        G.draw_edges()
-        G.draw_nodes(stair_points)
+        print("drawing points")
+        pipe = G.draw_nodes()
+        print("drawing edges")
+        G.draw_edges(pipe)
       
     storeys_with_nodes = sorted(set(list(map(node_to_ifc_storey.__getitem__, stair_points))))
 
     storey_to_nodes = dict(
-        (s, [t[0] for t in enumerate(ifc_storeys) if t[1] == s and t[0] in stair_points]) for s in storeys_with_nodes
+        (s, [t[0] for t in node_to_ifc_storey.items() if t[1] == s and t[0] in stair_points]) for s in storeys_with_nodes
     )
+    
+    print("storey nodes")
+    for kv in storey_to_nodes.items():
+        print(*kv)
         
     def yield_stair_paths():
+        
         for i in range(len(storeys_with_nodes) - 1):
+            print("storey", i)
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
