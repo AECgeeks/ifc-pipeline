@@ -724,7 +724,7 @@ def create_connectivity_graph():
         if b - a > 2:
             levels.append((b+a)/2.)
             
-    levels = [x + flow.spacing for x in sorted(levels)]
+    levels = [x + flow.spacing * 2 for x in sorted(levels)]
     ranges = []
 
     # Create until 2/3, trim at 1/2
