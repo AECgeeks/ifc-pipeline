@@ -842,10 +842,10 @@ reachable = traverse(walkable_region, walkable_seed_real)
 reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
 reachable_bottom = subtract(reachable, reachable_shifted)
 
-seed = intersect(walkable_region, external_door_voxels)
-
-flow = traverse(walkable_region, seed, connectedness=26, type="uint")
-export_csv(flow, "flow.csv")
+seed = intersect(reachable, external_door_voxels)
+flow = traverse(reachable, seed, connectedness=26, type="uint")
+flow_bottom = intersect(flow, reachable_bottom)
+export_csv(flow_bottom, "flow.csv")
 """
 
 """
