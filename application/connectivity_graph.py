@@ -1425,6 +1425,7 @@ def process_landings():
         
             incls = numpy.where(edges[:, 2] != 0.)[0]
             stair = points[max(incls.min() - 1, 0):incls.max() + 3]
+            stair = rdp(stair, epsilon=flow.spacing/2.)
             sedges = numpy.roll(stair, shift=-1, axis=0) - stair
             
             # Find relating element by bounding box search, not very robust,
