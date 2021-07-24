@@ -693,6 +693,29 @@ def stair_case(points):
     return numpy.cumsum(edges2_start, axis=0)
     
 
+@dataclass
+class level_data:
+    storey_idx : Any
+    elev : Any
+    height_map : Any
+    xmin : Any
+    ymin : Any
+    
+    def __hash__(self):
+        return hash(self.storey_idx)
+
+
+    def storey_inst(self):
+        return storey_by_elevation.get(self.elev)
+
+
+@dataclass
+class end_point:
+    node_id : int
+    to_level : int
+    from_level : int
+    
+    
 def create_connectivity_graph():
 
     levels = list(elevations)
@@ -741,26 +764,7 @@ def create_connectivity_graph():
         
     complete_graph = nx.Graph()
        
-    @dataclass
-    class level_data:
-        storey_idx : Any
-        elev : Any
-        height_map : Any
-        xmin : Any
-        ymin : Any
         
-        def __hash__(self):
-            return hash(self.storey_idx)
-
-
-        def storey_inst(self):
-            return storey_by_elevation.get(self.elev)
-
-
-    @dataclass
-    class end_point:
-        node_id : int
-        to_level : int
 
 
     def apply_end_point(mapping):
