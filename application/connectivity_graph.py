@@ -1366,28 +1366,48 @@ def process_landings():
                             # contains another stair point intermediate in path, skip
                             pass
                         else:
+                            print("path", path[0], "->", path[-1])
                             yield path
         
     results = []
                             
     N = -1
     
-    for path in yield_stair_paths():
-
-        # get the lowest elevation of a node in the graph for use later on
-        def get_height_map_min(lv):
-            hm = lv.height_map
-            return hm[hm != hm.min()].min()
-
-        levels = set(G.G.nodes[n]['level'] for n in G.G.nodes)
-        global_min_z = min(map(get_height_map_min, levels))
-        ##################################################################
+    stair_paths_by_begin_end = defaultdict(list)
     
-        points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
-        edges = numpy.roll(points, shift=-1, axis=0) - points
+    for path in yield_stair_paths():
+    
+        begin_end = path[0], path[-1]
+        stair_paths_by_begin_end[begin_end].append(path)
         
+    # get the lowest elevation of a node in the graph for use later on
+    def get_height_map_min(lv):
+        hm = lv.height_map
+        return hm[hm != hm.min()].min()
+
+    levels = set(G.G.nodes[n]['level'] for n in G.G.nodes)
+    global_min_z = min(map(get_height_map_min, levels))
+    ##################################################################
+    
+    for _, paths in stair_paths_by_begin_end.items():
+    
+        shortest = None
+        shortest_dist = 1e9
+        
+        for path in paths:
+    
+            points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
+            edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
+            path_length = sum(numpy.linalg.norm(e) for e in edges)
+            
+            if path_length < shortest_dist:
+                shortest_dist = path_length
+                shortest = points, edges
+                
+        points, edges = shortest
+            
         edges_not_at_start = numpy.array(
-            [e for e,p in zip(edges[:-1], points[:-1]) if p[2] != global_min_z]
+            [e for e,p in zip(edges, points[:-1]) if p[2] != global_min_z]
         )
         max_incl = numpy.array(edges_not_at_start)[:, 2].max()
         
@@ -1403,7 +1423,7 @@ def process_landings():
         obj_c = 1
         with open(fn, "w") as obj:
         
-            incls = numpy.where(edges[:-1, 2] != 0.)[0]
+            incls = numpy.where(edges[:, 2] != 0.)[0]
             stair = points[max(incls.min() - 1, 0):incls.max() + 3]
             sedges = numpy.roll(stair, shift=-1, axis=0) - stair
             
