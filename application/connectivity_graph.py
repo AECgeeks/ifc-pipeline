@@ -580,15 +580,15 @@ class connectivity_graph:
         return getattr(self.G, k)
         
     def draw_nodes(self, node_colouring=None):
-        
+            
         nodes = self.G.nodes()
         sorted_nodes = sorted(map(int, nodes))
         
-        if node_colouring is None:
-            end_point_ids = {p.node_id for p in all_end_points}
-            end_point_mask = numpy.array([x in end_point_ids for x in sorted_nodes])
-        else:
+        if node_colouring is not None:
             end_point_mask = numpy.array([x in node_colouring for x in sorted_nodes])
+        # else:
+        #     end_point_ids = {p.node_id for p in all_end_points}
+        #     end_point_mask = numpy.array([x in end_point_ids for x in sorted_nodes])
         
         ps = numpy.array([nodes[i]['o'] for i in sorted_nodes])
         levels = [nodes[i]['level'] for i in sorted_nodes]
@@ -597,7 +597,8 @@ class connectivity_graph:
         
         dz = numpy.zeros((len(nodes),))
         
-        flow_dist = numpy.zeros((len(nodes),))
+        flow_dist = {}
+        
         for p in sorted_nodes:
             flow_dist[p] = flow.lookup(self.get_node_xyz(p))
 
@@ -607,29 +608,45 @@ class connectivity_graph:
             
         ps2 = ps * flow.spacing + offset
         
-        mlab.points3d(*ps2[~end_point_mask].T, dz[~end_point_mask], color=(0.5,0.5,0.5), figure=ax_3d, scale_factor=0.1)
-        mlab.points3d(*ps2[ end_point_mask].T, dz[ end_point_mask], color=(1.0,0.0,0.0), figure=ax_3d, scale_factor=0.1)
-        
-        for N, xy, z, L, fd in zip(sorted_nodes, ps2, dz, levels, flow_dist):
+        for N, xy, z, L in zip(sorted_nodes, ps2, dz, levels):
+            fd = flow_dist.get(N)
             s = "    %d-%d" % (L.storey_idx, N)
             if fd:
                 s += "(%d)" % fd
             mlab.text3d(*xy, z, s, figure=ax_3d, scale=0.05)
             
-    def draw_edges(self):
-        for comp in nx.connected_components(self.G):
-            if len(comp) < 3: continue
-            for s,e in self.G.subgraph(comp).edges():
-                attrs = self.G[s][e]
-                ps = attrs['pts']
-                LD = attrs['level']
-                dz = LD.height_map[tuple(ps.T)]
-                ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
-                ps_3d = numpy.column_stack((ps2, dz))
-                ps3 = ps_3d
-                if dz.max() - dz.min() > 1.e-5:
-                    ps3 = stair_case(ps3)
-                mlab.plot3d(*ps3.T, color=(1,1,1), tube_radius=None, figure=ax_3d)
+        if node_colouring is None:
+            return mlab.points3d(*ps2.T, dz, color=(1.0,0.0,0.0), figure=ax_3d, scale_factor=0.1)
+        
+        mlab.points3d(*ps2[~end_point_mask].T, dz[~end_point_mask], color=(0.5,0.5,0.5), figure=ax_3d, scale_factor=0.1)
+        mlab.points3d(*ps2[ end_point_mask].T, dz[ end_point_mask], color=(1.0,0.0,0.0), figure=ax_3d, scale_factor=0.1)
+        
+            
+    def draw_edges(self, pts=None):
+        if pts is not None:
+            # max([numpy.linalg.norm(self.G.nodes[a]['o'] - self.G.nodes[b]['o']) for a,b in self.G.edges])
+            
+            # import pdb; pdb.set_trace()
+            ls = numpy.array(self.G.edges())
+            mapping = {b:a for a,b in enumerate(sorted(self.G.nodes()))}
+            ls2 = numpy.vectorize(mapping.get)(ls)
+            pts.mlab_source.dataset.lines = ls2
+            tube = mlab.pipeline.tube(pts, tube_radius=0.02)
+            mlab.pipeline.surface(tube, color=(0.8,0.8,0.8))
+        else:
+            for comp in nx.connected_components(self.G):
+                if len(comp) < 3: continue
+                for s,e in self.G.subgraph(comp).edges():
+                    attrs = self.G[s][e]
+                    ps = attrs['pts']
+                    LD = attrs['level']
+                    dz = LD.height_map[tuple(ps.T)]
+                    ps2 = ps * flow.spacing + (LD.ymin, LD.xmin)
+                    ps_3d = numpy.column_stack((ps2, dz))
+                    ps3 = ps_3d
+                    if dz.max() - dz.min() > 1.e-5:
+                        ps3 = stair_case(ps3)
+                    mlab.plot3d(*ps3.T, color=(1,1,1), tube_radius=None, figure=ax_3d)
 
                             
 def path_to_edges(p):
