@@ -716,6 +716,8 @@ class end_point:
     from_level : int
     
     
+SUPERSAMPLE = 2
+
 def create_connectivity_graph():
 
     levels = list(elevations)
@@ -824,21 +826,25 @@ def create_connectivity_graph():
             
             # print("x", x.min(), x.data.min())
             # print("y", y.min(), y.data.min())
-
-            obs = ~arr.mask
-            
+           
             LD = level_data(storey_idx, elev, heights.data, x.data.min(), y.data.min())        
             
             dxz, dyz = numpy.gradient(heights, flow.spacing)
             dZ = numpy.linalg.norm((dxz, dyz), axis=0)
             obs = ~arr.mask
-                                
+                                         
             # after distance?
             # no, after results in weird artefacts near the walls...
             # it really works better without, and then solve wrongly connected edges later.
             # obs[dZ > 3] = False
             
+            if SUPERSAMPLE > 1:
+                obs = skimage.transform.rescale(obs.astype(float)*100., SUPERSAMPLE, anti_aliasing=None, preserve_range=True) > 50.
+            
             ds = ndimage.distance_transform_edt(obs)
+            ds = ndimage.gaussian_filter(ds, sigma=3.)
+            
+            # import pdb; pdb.set_trace()
             
             # @todo would it help to blur a bit?                                                                                                                                     
             
@@ -846,34 +852,45 @@ def create_connectivity_graph():
             # ds[numpy.logical_and(dZ > 3, ~arr.mask)] = -1.
 
             ds_copy = ds.copy()
-            ds_copy[arr.mask] = numpy.nan       
+            ds_copy[~obs] = numpy.nan       
             
             # if storey_idx == 3:
             #     import pdb; pdb.set_trace()
             
             lp = ndimage.filters.laplace(ds)
-            maa = lp < lp.min() / 20.
+                       
+            maa = lp < lp.min() / 10.
             maa2 = skeletonize(maa)
             
-            # axx.imshow(ds_copy.T,  cmap='gray', alpha=0.5, extent=(y.data.min(), y.data.max(), x.data.min(), x.data.max()), origin='lower')
-            axx.imshow(maa2.T,  cmap='gray', extent=(y.data.min(), y.data.max(), x.data.min(), x.data.max()), origin='lower')
+            image_extents = (y.data.min(), y.data.max(), x.data.min(), x.data.max())
+            image_extents_3d = image_extents + (elev, elev)
+            
+            # axx.imshow(ds_copy.T,  cmap='gray', alpha=0.5, extent=image_extents, origin='lower')
+            axx.imshow(maa2.T,  cmap='gray', extent=image_extents, origin='lower')
             
             for bnd_idx, (clr, ctr) in enumerate(zip([(0,1,0,0.5), (1,0,0,0.5)], [zmin_2, zmax_2])):
-                tmp = numpy.zeros(shape=tuple(ds_copy.shape) + (4,))
+                tmp = numpy.zeros(shape=tuple(arr.mask.shape) + (4,))
                 if bnd_idx == 0:
                     tmp[numpy.logical_and(heights < ctr, ~arr.mask)] = clr
                 else:
                     tmp[numpy.logical_and(heights > ctr, ~arr.mask)] = clr
-                axx.imshow(tmp.transpose((1,0,2)), extent=(y.data.min(), y.data.max(), x.data.min(), x.data.max()), origin='lower')
+                axx.imshow(tmp.transpose((1,0,2)), extent=image_extents, origin='lower')
             
         
             if WITH_MAYAVI:
-                img = mlab.imshow(ds_copy[::-1, ::-1], colormap='gray', extent=(y.data.min(), y.data.max(), x.data.min(), x.data.max(), elev, elev), figure=ax_3d, transparent=False, interpolate=False)
+                img = mlab.imshow(ds_copy[::-1, ::-1], colormap='gray', extent=image_extents_3d, figure=ax_3d, transparent=False, interpolate=False)
                 img.module_manager.scalar_lut_manager.lut.nan_color = 0, 0, 0, 0
                 img.update_pipeline()
                     
             
             graph = sknw.build_sknw(maa2)
+            for n in graph.nodes:
+                graph.nodes[n]['pts'] = graph.nodes[n]['pts'].astype(float) / SUPERSAMPLE
+                graph.nodes[n]['o'] = graph.nodes[n]['o'].astype(float) / SUPERSAMPLE
+            for e in graph.edges:
+                graph.edges[e]['pts'] = graph.edges[e]['pts'].astype(float) / SUPERSAMPLE
+            
+            # import pdb; pdb.set_trace()
             
             # nodes_to_add = []
             # edges_to_add = []
