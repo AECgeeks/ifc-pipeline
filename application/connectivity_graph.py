@@ -1100,6 +1100,10 @@ def create_connectivity_graph():
             # take nodes from the 10 largest components to consider for end points
             nodes_to_consider = []
             comps = list(nx.connected_components(graph))
+            
+            if len(comps) == 0:
+                continue
+            
             max_comp_size = max(map(len, comps))
             for comp in comps:
                 if len(comp) >= max_comp_size // 4:
