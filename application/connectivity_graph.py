@@ -1194,11 +1194,20 @@ def create_connectivity_graph():
             # fa = flow_dist[a.node_id]
             # fb = flow_dist[b.node_id]
             
-            fa = flow.lookup(get_node_xyz(complete_graph)(a))
-            fb = flow.lookup(get_node_xyz(complete_graph)(b))
-            
             xyza = get_node_xyz(complete_graph)(a)
             xyzb = get_node_xyz(complete_graph)(b)
+            
+            euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xyzb)) ** 2))
+            
+            fa = flow.lookup(xyza)
+            fb = flow.lookup(xyzb)            
+            
+            print("considering ", a.node_id, "->", b.node_id, ":", *xyza, "->", *xyzb, "values", fa, fb)
+            print("euclid dist", euclid_dist)
+            
+            if euclid_dist > 10.:
+                print("too far")
+                continue            
             
             ezmin, ezmax = sorted((xyza[2], xyzb[2]))
             flow_mi_ma = flow.get_slice(ezmin - 1., ezmax + 1.)
@@ -1206,12 +1215,10 @@ def create_connectivity_graph():
             LD = level_data(-1, (xyza[2] + xyzb[2]) / 2., heights.data, x.data.min(), y.data.min())
             
             # manhattan_dist = sum(numpy.abs(numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing)
-            euclid_dist = numpy.sqrt(numpy.sum((numpy.array(xyza) - numpy.array(xyzb)) ** 2))
             # avg_dist  = (manhattan_dist + euclid_dist) / 2.
             
             flow_diff = abs(fa - fb) * flow.spacing / 10. # voxec stores floats as int(v * 10)
             
-            print("considering ", *xyza, "->", *xyzb, "values", fa, fb)
             print("flow ratio", abs(flow_diff - euclid_dist) / euclid_dist)
             
             if abs(flow_diff - euclid_dist) / euclid_dist < 0.25:
