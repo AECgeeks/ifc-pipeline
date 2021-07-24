@@ -1604,7 +1604,10 @@ def process_routes():
 
 
     def break_at_doors(tup):
-        sp, nodes, path, points, edges = tup
+        sp, nodes, path, points, _ = tup
+        
+        points = rdp(points, epsilon=flow.spacing/2.)
+        edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
         
         last_break = 0
         previous_break_point = ()
