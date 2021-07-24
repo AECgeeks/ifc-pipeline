@@ -524,6 +524,14 @@ class connectivity_graph:
     def __init__(self, G):
         self.G = G
         
+        connected_nodes = []
+        for comp in nx.connected_components(self.G):
+            if len(comp) >= 3:
+                connected_nodes.extend(comp)
+                
+        connected_nodes = set(connected_nodes)
+        
+        self.G = self.G.subgraph(connected_nodes)
         
     def get_node_z(self, n):
         attrs = self.G.nodes[n]
