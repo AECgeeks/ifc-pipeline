@@ -198,6 +198,19 @@ def do_process(id, translation=None):
     input_files = [utils.storage_file_for_id(id, "ifc")]
     
     if translation:
+        if translation == 'auto':
+            proc = subprocess.Popen([
+                sys.executable,
+            ], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            stdo, _ = proc.communicate(input=("""
+import ifcopenshell
+f = ifcopenshell.open('%(fn)s')
+negate = lambda x: -x
+print(*map(negate, f.by_type("IfcSite")[0].ObjectPlacement.RelativePlacement.Location.Coordinates))
+""" % {'fn': input_files[0]}).encode('ascii'))
+            translation = dict(zip("xyz", map(float, stdo.decode('ascii').split(' '))))
+            print("Translation auto =", *translation.items())
+            
         for f in input_files:
             os.rename(f, f + ".old")
             proc = subprocess.Popen([

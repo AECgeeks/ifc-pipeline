@@ -30,10 +30,11 @@ def accept_file_gzip():
                 
     translation = request.headers.get('translation')
     if translation:
-        try:
-            translation = json.loads(translation)
-        except:
-            abort(400)
+        if translation != 'auto':
+            try:
+                translation = json.loads(translation)
+            except:
+                abort(400)
     
     id = process_upload(process, translation=translation)
     return jsonify({
