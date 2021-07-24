@@ -277,7 +277,7 @@ class flow_field:
     
     def __init__(self, fn):
         self.flow = pd.read_csv(fn, delimiter=',').values
-        self.flow = self.flow[self.flow[:,3] != 1.]
+        # self.flow = self.flow[self.flow[:,3] != 1.]
 
         self.spacing = min(numpy.diff(sorted(set(self.flow.T[0]))))
 
