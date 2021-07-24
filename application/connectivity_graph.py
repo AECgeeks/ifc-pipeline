@@ -750,32 +750,35 @@ def create_connectivity_graph():
         st, en, st2, en2 = None, None, None, None
         if i == 0:
             st = levels[i] - 1.5
-            st2 = levels[i] - 0.5
+            st2 = levels[i] - 0.7
         else:
             st = (levels[i] + levels[i-1] * 2.) / 3.
-            st2 = levels[i] - 0.5
+            st2 = levels[i] - 0.7
         if i == len(levels) - 1:
             en = levels[i] + 1.5
-            en2 = levels[i] + 0.5
+            en2 = levels[i] + 0.7
         else:
             en = (levels[i] + levels[i+1] * 2.) / 3.
-            en2 = levels[i] + 0.5
+            en2 = levels[i] + 0.7
         ranges.append((st, en, st2, en2))
         
-    complete_graph = nx.Graph()
-       
+    print("ranges")
+    for r in ranges:
+        print(*zip(("st", "en", "st2", "en2"), r))
         
+    complete_graph = nx.Graph()
 
 
     def apply_end_point(mapping):
-        return lambda ep: end_point(mapping[ep.node_id], ep.to_level)
+        return lambda ep: end_point(mapping[ep.node_id], ep.to_level, ep.from_level)
 
        
-    def get_node_xyz(graph):
-        def inner(ep):              
-            xy = graph.nodes[ep.node_id]['o']
+    def get_node_xyz(graph, LD0=None):
+        def inner(ep):
+            nid = ep if isinstance(ep, int) else ep.node_id
+            xy = graph.nodes[nid]['o']
             xyn = tuple(numpy.int16(xy))
-            LD = graph.nodes[ep.node_id]['level']
+            LD = LD0 or graph.nodes[nid]['level']
             dz = LD.height_map[xyn]
             xy2 = xy * flow.spacing + (LD.ymin, LD.xmin)
             xyz = tuple(xy2) + (dz,)
@@ -791,8 +794,8 @@ def create_connectivity_graph():
     
     clrs = plt.get_cmap("Dark2").colors
     for storey_idx, (elev, (zmin, zmax, zmin_2, zmax_2)) in enumerate(zip(levels, ranges)):
-        f.gca().axvline(zmin_2 + flow.spacing * 2 + 1.e-3, ls='--', color=clrs[storey_idx % len(clrs)])
-        f.gca().axvline(zmax_2 - flow.spacing * 2 + 1.e-3, ls='--', color=clrs[storey_idx % len(clrs)])
+        f.gca().axvline(zmin_2, ls='--', color=clrs[storey_idx % len(clrs)])
+        f.gca().axvline(zmax_2, ls='--', color=clrs[storey_idx % len(clrs)])
         if numpy.any((numpy.array(elevations) - (elev - flow.spacing)) < 0.01):
             f.gca().axvline(elev, color=clrs[storey_idx % len(clrs)])
             f.gca().text(elev, f.gca().get_ylim()[0], "%.3f" % elev)
@@ -915,12 +918,12 @@ def create_connectivity_graph():
             
             for s,e in graph.edges():
                 ps = graph[s][e]['pts']
-                dz = heights.data[tuple(ps.T)]
-                dzmin, dzmax = dz.min(), dz.max()
+                dz = heights.data[tuple(numpy.int_(ps.T))]
+                # dzmin, dzmax = dz.min(), dz.max()
                 within = numpy.logical_and(dz >= zmin_2, dz <= zmax_2)
                 
-                under = dz < zmin_2 + flow.spacing * 2 + 1.e-3
-                above = dz > zmax_2 - flow.spacing * 2 - 1.e-3
+                # under = dz < zmin_2 + flow.spacing * 2 + 1.e-3
+                # above = dz > zmax_2 - flow.spacing * 2 - 1.e-3
                 
                 if not numpy.any(within):
                     # all outside of the [zmin, zmax] range
@@ -974,11 +977,11 @@ def create_connectivity_graph():
                             
                             # import pdb; pdb.set_trace()
                             
-                            if under[st_] or above[st_]:
-                                tlvl = storey_idx - 1 if under[st_] else storey_idx + 1
-                                end_points.append(
-                                    end_point(STN, tlvl)
-                                )
+                            # if under[st_] or above[st_]:
+                            #     tlvl = storey_idx - 1 if under[st_] else storey_idx + 1
+                            #     end_points.append(
+                            #         end_point(STN, tlvl, storey_idx)
+                            #     )
                         else:
                             STN = s
 
@@ -990,11 +993,11 @@ def create_connectivity_graph():
                             
                             # import pdb; pdb.set_trace()
                             
-                            if under[en_] or above[en_] or under[en_+1] or above[en_+1]:
-                                tlvl = storey_idx - 1 if (under[en_] or under[en_+1]) else storey_idx + 1
-                                end_points.append(
-                                    end_point(ENN, tlvl)
-                                )
+                            # if under[en_] or above[en_] or under[en_+1] or above[en_+1]:
+                            #     tlvl = storey_idx - 1 if (under[en_] or under[en_+1]) else storey_idx + 1
+                            #     end_points.append(
+                            #         end_point(ENN, tlvl, storey_idx)
+                            #     )
                         else:
                             ENN = e
                             
@@ -1016,7 +1019,7 @@ def create_connectivity_graph():
                     #     edges_to_remove.append((s, e))
                     
             print("removing", len(edges_to_remove), "edges, adding", len(edges_to_add))
-            print("found", len(end_points), "end points")
+            # print("found", len(end_points), "end points")
                     
             graph.remove_edges_from(edges_to_remove)
             for n, kwargs in nodes_to_add:
@@ -1063,7 +1066,7 @@ def create_connectivity_graph():
                 # x,y,z
                 ps_3d = numpy.column_stack((ps2, dz))
                 # simplify
-                # ps3 = rdp(ps_3d, epsilon=spacing/2.)
+                # ps3 = rdp(ps_3d, epsilon=flow.spacing/2.)
                 ps3 = ps_3d
                 
                 if dz.max() - dz.min() > 1.e-5:
@@ -1076,6 +1079,22 @@ def create_connectivity_graph():
                     # mlab.plot3d(*ps3.T, color=(1,1,1), figure=ax_3d)
                     pass
                     
+            # take nodes from the 10 largest components to consider for end points
+            nodes_to_consider = []
+            comps = list(nx.connected_components(graph))
+            max_comp_size = max(map(len, comps))
+            for comp in comps:
+                if len(comp) >= max_comp_size // 4:
+                    nodes_to_consider.extend(comp)
+                
+            node_xyzs = list(zip(nodes_to_consider, map(get_node_xyz(graph, LD), nodes_to_consider)))
+            # we have to account for threads, when we cut of above a certain threshold, the next z value below that can be significantly lower
+            end_points_above = [end_point(a, storey_idx + 1, storey_idx) for a,(bx,by,bz) in node_xyzs if bz >= zmax_2 - 0.3]
+            end_points_below = [end_point(a, storey_idx - 1, storey_idx) for a,(bx,by,bz) in node_xyzs if bz <= zmin_2 + 0.3]
+            end_points = end_points_below + end_points_above
+            
+            # import pdb; pdb.set_trace()
+                    
             relabeled = nx.relabel.convert_node_labels_to_integers(
                 graph,
                 first_label=len(complete_graph.nodes()),
@@ -1083,6 +1102,10 @@ def create_connectivity_graph():
             )
             
             node_mapping = {relabeled.nodes[n]['old_label']: n for n in relabeled.nodes}
+            
+            # import pdb; pdb.set_trace()
+            
+            print(len(end_points), "end points")
             
             all_end_points.extend(map(apply_end_point(node_mapping), end_points))
             
