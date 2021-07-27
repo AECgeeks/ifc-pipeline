@@ -98,6 +98,8 @@ class ifc_element:
             self.width = inst.OverallWidth * lu
         if hasattr(inst, "OverallHeight") and inst.OverallHeight is not None:
             self.height = inst.OverallHeight * lu
+            
+        self.M = None
         
         if self.geom is None:
             return
@@ -459,6 +461,9 @@ def process_doors():
                            headaxislength=4.5/3)
         
         for ob in objs:
+            if ob.M is None:
+                continue
+                
             Z = ob.M[2,3] + 1.
             if Z < mi or Z > ma:
                 continue
