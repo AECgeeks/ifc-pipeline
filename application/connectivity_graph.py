@@ -1593,7 +1593,12 @@ def process_routes():
                 shortest_path_space_edges = None
                 
                 for nb in exterior_nodes:
-                    for path in nx.all_simple_paths(G.G, na, nb):
+                    try:
+                        asp = list(nx.all_simple_paths(G.G, na, nb))
+                    except:
+                        # @todo we still need to better understand how this can fail
+                        continue
+                    for path in asp:
                         points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
                         edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
                         plen = sum(map(numpy.linalg.norm, edges))
