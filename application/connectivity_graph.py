@@ -11,6 +11,7 @@ import subprocess
 import bisect
 import operator
 from collections import Counter, defaultdict
+from functools import lru_cache
 
 from dataclasses import dataclass
 from typing import Any
@@ -563,6 +564,7 @@ class connectivity_graph:
         return dz.max() - dz.min()
 
 
+    @lru_cache(maxsize=1024)
     def get_edge_points(self, se):
         attrs = self.G[se[0]][se[1]]
         ps = attrs['pts']
@@ -1236,11 +1238,6 @@ def create_connectivity_graph():
                 print("too far")
                 continue            
             
-            ezmin, ezmax = sorted((xyza[2], xyzb[2]))
-            flow_mi_ma = flow.get_slice(ezmin - 1., ezmax + 1.)
-            x, y, arr, heights = flow.get_mean(flow_mi_ma)
-            LD = level_data(-1, (xyza[2] + xyzb[2]) / 2., heights.data, x.data.min(), y.data.min())
-            
             # manhattan_dist = sum(numpy.abs(numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing)
             # avg_dist  = (manhattan_dist + euclid_dist) / 2.
             
@@ -1258,6 +1255,11 @@ def create_connectivity_graph():
                 
                 # pts = numpy.array(list(bresenham(*pa, *pb)))
                 pts = get_node_intermediate_path(a.node_id, b.node_id)
+
+                ezmin, ezmax = sorted((xyza[2], xyzb[2]))
+                flow_mi_ma = flow.get_slice(ezmin - 1., ezmax + 1.)
+                x, y, arr, heights = flow.get_mean(flow_mi_ma)
+                LD = level_data(-1, (xyza[2] + xyzb[2]) / 2., heights.data, x.data.min(), y.data.min())
                                 
                 # when we cross masked values we know we're connecting wrong points
                 if not numpy.any(heights.mask[tuple(pts.T)]):
@@ -1596,7 +1598,7 @@ def process_routes():
                     for path in nx.all_simple_paths(G.G, na, nb):
                         points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
                         edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
-                        plen = sum(map(numpy.linalg.norm, edges))
+                        plen = numpy.sum(numpy.linalg.norm(edges, axis=1))
                         
                         if plen < min_len_space:
                             min_len_space = plen
