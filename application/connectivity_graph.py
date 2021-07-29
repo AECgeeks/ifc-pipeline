@@ -306,9 +306,11 @@ class flow_field:
         
         self.tree = KDTree(self.flow[:, 0:3])
         
-        self.norm = matplotlib.colors.Normalize(
-            vmin=self.flow.T[3].min() * self.spacing, 
-            vmax=self.flow.T[3].max() * self.spacing)
+        self.norm = None
+        if "matplotlib" in globals():
+            self.norm = matplotlib.colors.Normalize(
+                vmin=self.flow.T[3].min() * self.spacing, 
+                vmax=self.flow.T[3].max() * self.spacing)
         
 
     def get_slice(self, min_z, max_z):
