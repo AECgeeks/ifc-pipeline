@@ -188,4 +188,5 @@ else:
     with open('docker-compose.yml', 'w') as f:
         print(template.render(**vars(args)), file=f)
 
-    subprocess.call(['docker-compose', '-f', 'docker-compose.yml'] + compose_args)
+    if compose_args:
+        subprocess.call(['docker-compose', '-f', 'docker-compose.yml'] + compose_args)
