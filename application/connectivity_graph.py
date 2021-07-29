@@ -19,9 +19,23 @@ from typing import Any
 import numpy
 import skimage
 from numpy.ma import masked_array
-import matplotlib
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+
+WITH_PLOT = False
+if WITH_PLOT:
+    import matplotlib
+    from matplotlib import pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+else:
+    class whatever:
+        def __getattr__(self, _):
+            return self
+        def __call__(self, *args, **kwargs):
+            return self
+        def __len__(self):
+            return 1
+        def __getitem__(self, _):
+            return self
+    plt = whatever()
 
 import pandas as pd
 
