@@ -327,6 +327,30 @@ def process(id, callback_url, translation=None, **kwargs):
         r = requests.post(callback_url, data={"status": status, "id": id})
 
 
+def assert_ifc_type(fn, ifc_type):
+    proc = subprocess.Popen([
+        sys.executable,
+    ], stdin=subprocess.PIPE)
+    proc.communicate(input=("""
+import ifcopenshell
+f = ifcopenshell.open('%s')
+exit(1 if len(f.by_type('%s')) == 0 else 0)
+""" % (fn, ifc_type)).encode('ascii'))
+    return proc.returncode == 0
+
+
+def empty_result(d, id, data=None):
+    try: os.makedirs(d)
+    except: pass
+    with open(os.path.join(d, id + '.json'), 'w') as f:
+        json.dump(data if data is not None else {
+            'id': id,
+            'results': []
+        }, f)
+    utils.store_file(id, "json")
+    set_progress(id, 100)
+
+
 def escape_routes_old(id, config, **kwargs):
 
         d = utils.storage_dir_for_id(id, output=True)
@@ -586,7 +610,7 @@ all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
 voxels = voxelize(all_surfaces)
 spaces = create_geometry(file, include={"IfcSpace"})
 space_ids = voxelize(spaces, type="uint", method="volume")
-space_voxels = voxelize(spaces, method="volume")
+space_voxels = copy(space_ids, type="bit")
 headroom = subtract(space_voxels, voxels)
 headroom_height = collapse_count(headroom, 0, 0, -1)
 space_footprint = collapse(space_voxels, 0, 0, -1)
@@ -618,7 +642,11 @@ def process_3_4(args, context):
     for t in args.get('thresholds', []):
         n = t / 0.05
         for di in context.get_json("data_%(n)d.json" % locals()):
-            d[space_guid_mapping[int(di.get('id'))]].append(float(di.get('count')) * 0.05 ** 2)
+            sid = int(di.get('id'))
+            sgd = space_guid_mapping.get(sid)
+            if sgd is None: continue
+            # @todo ^ this appears to be only for 0
+            d[sgd].append(float(di.get('count')) * 0.05 ** 2)
     
     context.put_json(context.id + '.json', {
         'space_heights': d,
@@ -1063,6 +1091,16 @@ def space_heights(id, config, **kwargs):
     except:
         abort(400)
         
+    files = [utils.ensure_file(f, "ifc") for f in config['ids']]
+    d = utils.storage_dir_for_id(id, output=True)
+
+    if not any(map(functools.partial(assert_ifc_type, ifc_type="IfcSpace"), files)):
+        return empty_result(d, id, {
+            'space_heights': {},
+            'thresholds': thresholds,
+            'id': id
+        })
+    
     process_voxel_check(
         make_script_3_4,
         process_3_4,
@@ -1088,6 +1126,7 @@ def stair_headroom(id, config, **kwargs):
         **kwargs)
 
 
+
 def ramp_headroom(id, config, **kwargs):
     height = config.get('height', 2.2)
     
@@ -1098,29 +1137,9 @@ def ramp_headroom(id, config, **kwargs):
 
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
     d = utils.storage_dir_for_id(id, output=True)
-    
-    def has_ramps(fn):
-        proc = subprocess.Popen([
-            sys.executable,
-        ], stdin=subprocess.PIPE)
-        proc.communicate(input=("""
-import ifcopenshell
-f = ifcopenshell.open('%s')
-exit(1 if len(f.by_type('IfcRamp')) == 0 else 0)
-""" % fn).encode('ascii'))
-        return proc.returncode == 0
         
-    if not any(map(has_ramps, files)):
-        try: os.makedirs(d)
-        except: pass
-        with open(os.path.join(d, id + '.json'), 'w') as f:
-            json.dump({
-                'id': id,
-                'results': []
-            }, f)
-        utils.store_file(id, "json")
-        set_progress(id, 100)
-        return
+    if not any(map(functools.partial(assert_ifc_type, ifc_type="IfcRamp"), files)):
+        return empty_result(d, id)
 
         
     process_voxel_check(
@@ -1133,6 +1152,13 @@ exit(1 if len(f.by_type('IfcRamp')) == 0 else 0)
 
 
 def door_direction(id, config, **kwargs):
+
+    files = [utils.ensure_file(f, "ifc") for f in config['ids']]
+    d = utils.storage_dir_for_id(id, output=True)
+        
+    if not any(map(functools.partial(assert_ifc_type, ifc_type="IfcDoor"), files)):
+        return empty_result(d, id)
+
     process_voxel_check(
         make_script_3_31,
         process_3_31,
@@ -1167,6 +1193,12 @@ def escape_routes(id, config, **kwargs):
         length = float(length)
     except:
         abort(400)
+        
+    files = [utils.ensure_file(f, "ifc") for f in config['ids']]
+    d = utils.storage_dir_for_id(id, output=True)
+
+    if not any(map(functools.partial(assert_ifc_type, ifc_type="IfcSpace"), files)):
+        return empty_result(d, id)
 
     process_voxel_check(
         make_script_3_31,
