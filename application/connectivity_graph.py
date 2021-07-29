@@ -1248,7 +1248,7 @@ def create_connectivity_graph():
             
             print("flow ratio", abs(flow_diff - euclid_dist) / euclid_dist)
             
-            if abs(flow_diff - euclid_dist) / euclid_dist < 0.3:
+            if abs(flow_diff - euclid_dist) / euclid_dist < 0.32:
                 print("flow difference ok")
                 na = complete_graph.nodes[a.node_id]
                 nb = complete_graph.nodes[b.node_id]
