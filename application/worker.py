@@ -835,21 +835,25 @@ surface_voxels_region = voxelize(surfaces)
 slab_voxels_region = voxelize(slabs)
 door_voxels_region = voxelize(doors)
 voxels = voxelize(all_surfaces)
-external_door_voxels = voxelize(external_doors)
+external_door_voxels_thin = voxelize(external_doors)
+external_door_voxels_layer = offset(external_door_voxels_thin)
+external_door_voxels = union(external_door_voxels_thin, external_door_voxels_layer)
 
 empty = constant_like(voxels, 0, type="bit")
 surface_voxels = union(empty, surface_voxels_region)
 slab_voxels = union(empty, slab_voxels_region)
-door_voxels = union(empty, door_voxels_region)
+door_voxels_thin = union(empty, door_voxels_region)
+door_voxels_layer = offset(door_voxels_thin)
+door_voxels = union(door_voxels_thin, door_voxels_layer)
 
 walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
 walkable_minus = subtract(walkable, slab_voxels)
-walkable_seed = intersect(door_voxels, walkable_minus)
 surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
 surfaces_padded = offset_xy(surface_voxels, 0.1)
 surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
 walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
-walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+walkable_seed = intersect(door_voxels, walkable_minus)
+walkable_seed_real = intersect(walkable_seed, walkable_region)
 reachable = traverse(walkable_region, walkable_seed_real)
 reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
 reachable_bottom = subtract(reachable, reachable_shifted)
@@ -1169,7 +1173,7 @@ def door_direction(id, config, **kwargs):
 
 
 def landings(id, config, **kwargs):
-    length = config.get('length', 2.2)
+    length = config.get('length', 1.5)
 
     try:
         length = float(length)

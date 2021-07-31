@@ -477,29 +477,29 @@ def process_doors():
                            headlength=5/3,
                            headaxislength=4.5/3)
         
-        for ob in objs:
-            if ob.M is None:
-                continue
+            for ob in objs:
+                if ob.M is None:
+                    continue
+                    
+                Z = ob.M[2,3] + 1.
+                if Z < mi or Z > ma:
+                    continue
+                    
+                for ax in axes:
+                    ob.draw(ax)
+                ob.validate(flow)
                 
-            Z = ob.M[2,3] + 1.
-            if Z < mi or Z > ma:
-                continue
-                
-            for ax in axes:
-                ob.draw(ax)
-            ob.validate(flow)
-            
-            # AttributeError: 'FancyArrow' object has no attribute 'do_3d_projection'
-            for ax in axes:
-                ob.draw_arrow(ax)
+                # AttributeError: 'FancyArrow' object has no attribute 'do_3d_projection'
+                for ax in axes:
+                    ob.draw_arrow(ax)
 
-            if ob in result_mapping:
-                print("Warning element already emitted")
-            else:
-                N = len(result_mapping)
-                fn = "%s_%d.obj" % (id, N)
-                ob.draw_quiver(flow, x_y_angle, fn)
-                result_mapping[ob] = N
+                if ob in result_mapping:
+                    print("Warning element already emitted")
+                else:
+                    N = len(result_mapping)
+                    fn = "%s_%d.obj" % (id, N)
+                    ob.draw_quiver(flow, x_y_angle, fn)
+                    result_mapping[ob] = N
             
             
         for ob in wall_objs:
@@ -1388,7 +1388,16 @@ def process_landings():
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
-                    for path in nx.all_simple_paths(G.G, na, nb):
+                
+                    try:
+                        asp = [nx.shortest_path(G.G, na, nb)]
+                    except:
+                        # @todo we still need to better understand how this can fail
+                        continue
+                
+                    # nx.all_simple_paths(G.G, na, nb)
+                
+                    for path in asp:
                         if stair_points & set(path[1:-1]):
                             # contains another stair point intermediate in path, skip
                             pass
@@ -1612,11 +1621,16 @@ def process_routes():
                 
                 for nb in exterior_nodes:
                     try:
-                        asp = list(nx.all_simple_paths(G.G, na, nb))
+                        asp = [nx.shortest_path(G.G, na, nb)]
                     except:
                         # @todo we still need to better understand how this can fail
                         continue
+                        
                     for path in asp:
+                    
+                        if len(path_to_edges(path)) == 0:
+                            continue
+                        
                         points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
                         edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
                         plen = numpy.sum(numpy.linalg.norm(edges, axis=1))
