@@ -1388,7 +1388,10 @@ def process_landings():
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
-                    asp = [nx.shortest_path(G.G, na, nb)]
+                    try:
+                        asp = [nx.shortest_path(G.G, na, nb)]
+                    except: continue
+                    
                     # nx.all_simple_paths(G.G, na, nb)                
                     for path in asp:
                         if stair_points & set(path[1:-1]):
@@ -1620,7 +1623,10 @@ def process_routes():
                 shortest_path_space_edges = None
                 
                 for nb in exterior_nodes:
-                    asp = [nx.shortest_path(G.G, na, nb)]                        
+                    try:
+                        asp = [nx.shortest_path(G.G, na, nb)]
+                    except: continue
+                    
                     for path in asp:
                     
                         if len(path_to_edges(path)) == 0:
