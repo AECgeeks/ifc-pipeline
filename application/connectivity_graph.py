@@ -1388,15 +1388,8 @@ def process_landings():
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
-                
-                    try:
-                        asp = [nx.shortest_path(G.G, na, nb)]
-                    except:
-                        # @todo we still need to better understand how this can fail
-                        continue
-                
-                    # nx.all_simple_paths(G.G, na, nb)
-                
+                    asp = [nx.shortest_path(G.G, na, nb)]
+                    # nx.all_simple_paths(G.G, na, nb)                
                     for path in asp:
                         if stair_points & set(path[1:-1]):
                             # contains another stair point intermediate in path, skip
@@ -1600,7 +1593,8 @@ def process_routes():
         is_external = ifcopenshell.util.element.get_psets(inst).get('Pset_DoorCommon', {}).get('IsExternal', False) is True
         is_external_mapping[dobj] = is_external
         if is_external:
-            node_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
+            array_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
+            node_idx = list(G.nodes)[array_idx]
             exterior_nodes.append(node_idx)
             
     
@@ -1620,12 +1614,7 @@ def process_routes():
                 shortest_path_space_edges = None
                 
                 for nb in exterior_nodes:
-                    try:
-                        asp = [nx.shortest_path(G.G, na, nb)]
-                    except:
-                        # @todo we still need to better understand how this can fail
-                        continue
-                        
+                    asp = [nx.shortest_path(G.G, na, nb)]                        
                     for path in asp:
                     
                         if len(path_to_edges(path)) == 0:
