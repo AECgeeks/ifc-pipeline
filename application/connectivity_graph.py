@@ -1573,6 +1573,12 @@ def process_routes():
     results = []
 
     G = create_connectivity_graph()
+    
+    if WITH_MAYAVI:
+        print("drawing points")
+        pipe = G.draw_nodes()
+        print("drawing edges")
+        G.draw_edges(pipe)
 
     nodes_by_space = defaultdict(list)
     exterior_nodes = []
@@ -1798,6 +1804,9 @@ def process_routes():
             "id": id,
             "results": results
         }, f)
+        
+    if WITH_MAYAVI:
+        mlab.show()
 
 
 if command == "doors":
