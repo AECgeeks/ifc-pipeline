@@ -1040,7 +1040,8 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
     values = {
         'voxelfile': command,
         'threads': cpu_count() // int(os.environ.get('NUM_WORKERS', '1')),
-        'chunk': 16
+        'chunk': 16,
+        'size': kwargs.get('size', 0.05)
     }
     
     try:
@@ -1111,6 +1112,7 @@ def space_heights(id, config, **kwargs):
         {'thresholds': thresholds},
         id,
         config['ids'],
+        size=0.10,
         **kwargs)
 
 def stair_headroom(id, config, **kwargs):
