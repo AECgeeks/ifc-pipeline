@@ -126,7 +126,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    image: aecgeeks/ifc-pipeline:release-0.0.9
+    image: aecgeeks/ifc-pipeline:release-0.1.0
     entrypoint:
       - supervisord
       - -n
