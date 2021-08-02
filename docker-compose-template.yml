@@ -64,6 +64,7 @@ services:
       - POSTGRES_HOST={{ db_host or 'db' }}
       - POSTGRES_USER={{ db_user or 'postgres' }}
       - POSTGRES_PASS={{ db_pass or 'postgres' }}
+      - CHECK_TIMEOUT=3600
     expose:
       - "5000"
     depends_on:
