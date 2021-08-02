@@ -598,6 +598,8 @@ y = json_stats("internal.json", {"internal"})
                     'under_ground': under,
                     'above_ground': above
                 }, f)
+                
+            utils.store_file(id, "json")
             
         except:
             traceback.print_exc()
