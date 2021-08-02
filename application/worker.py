@@ -625,7 +625,7 @@ headroom_height_footprint = intersect(headroom_height, space_footprint_thicker)
 x = describe_group_by("data_%(n)d.json", headroom_height_footprint_%(n)d, space_ids)
 """
     
-    return ''.join((basis,) + tuple(threshold % {'n': t / 0.05} for t in args.get('thresholds', [])))
+    return ''.join((basis,) + tuple(threshold % {'n': t / 0.10} for t in args.get('thresholds', [])))
 
 
 def process_3_4(args, context):
@@ -639,8 +639,12 @@ def process_3_4(args, context):
     
     d = defaultdict(list)
     
+    # @todo the logic here needs to be reversed. starting from the
+    # spaces so that when higher thresholds cause spaces to be left
+    # out we can put zero in the list.
+    
     for t in args.get('thresholds', []):
-        n = t / 0.05
+        n = t / 0.10
         for di in context.get_json("data_%(n)d.json" % locals()):
             sid = int(di.get('id'))
             sgd = space_guid_mapping.get(sid)
