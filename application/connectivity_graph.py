@@ -1516,7 +1516,12 @@ def process_landings():
             cross_z = lambda h: normalize(numpy.cross(normalize(h), (0.,0.,1.)))
             crss = list(map(cross_z, horz))
             crss.append(crss[-1])
-            avgs = [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
+            # there can be nans as averaging opposite vectors gives a
+            # zero vector, normalize gives nan. It's not clear why
+            # opposite vectors are present in the edges.
+            avgs = numpy.nan_to_num(
+                [crss[0]] + [normalize(a+b) for a, b in zip(crss[1:], crss[:-1])]
+            )
                    
             pt = stair[0].copy()
             avg_i = 0
