@@ -120,7 +120,7 @@ for gn, g in groups():
         E = unique_edges.shape[0]
         F = faces.shape[0]
 
-        print(V, E, F, V-E+F)
+        # print(V, E, F, V-E+F)
         # @todo check for inner boundaries here?
 
         esminfs = numpy.unique(unique_edges, return_counts=True)[1] - numpy.unique(faces, return_counts=True)[1]

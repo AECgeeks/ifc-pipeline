@@ -1223,9 +1223,11 @@ def create_connectivity_graph():
                     ))
 
         return numpy.array(list(bresenham(*numpy.int_(a_pt), *numpy.int_(b_pt))))
-        
+    
+    """    
     for p in all_end_points:
         print(p, get_node_xyz(complete_graph)(p))
+    """
             
     for a, b in itertools.combinations(all_end_points, 2):        
     
@@ -1247,11 +1249,11 @@ def create_connectivity_graph():
             fa = flow.lookup(xyza)
             fb = flow.lookup(xyzb)            
             
-            print("considering ", a.node_id, "->", b.node_id, ":", *xyza, "->", *xyzb, "values", fa, fb)
-            print("euclid dist", euclid_dist)
+            # print("considering ", a.node_id, "->", b.node_id, ":", *xyza, "->", *xyzb, "values", fa, fb)
+            # print("euclid dist", euclid_dist)
             
             if euclid_dist > 10.:
-                print("too far")
+                # print("too far")
                 continue            
             
             # manhattan_dist = sum(numpy.abs(numpy.array(xyza) - numpy.array(xyzb)) / flow.spacing)
@@ -1259,10 +1261,10 @@ def create_connectivity_graph():
             
             flow_diff = abs(fa - fb) * flow.spacing / 10. # voxec stores floats as int(v * 10)
             
-            print("flow ratio", abs(flow_diff - euclid_dist) / euclid_dist)
+            # print("flow ratio", abs(flow_diff - euclid_dist) / euclid_dist)
             
             if abs(flow_diff - euclid_dist) / euclid_dist < 0.32:
-                print("flow difference ok")
+                # print("flow difference ok")
                 na = complete_graph.nodes[a.node_id]
                 nb = complete_graph.nodes[b.node_id]
                 
@@ -1279,7 +1281,7 @@ def create_connectivity_graph():
                                 
                 # when we cross masked values we know we're connecting wrong points
                 if not numpy.any(heights.mask[tuple(pts.T)]):
-                    print("height mask ok")
+                    # print("height mask ok")
                     complete_graph.add_edge(a.node_id, b.node_id, pts=pts, level=LD)
                     
                     
@@ -1377,14 +1379,16 @@ def process_landings():
         (s, [t[0] for t in node_to_ifc_storey.items() if t[1] == s and t[0] in stair_points]) for s in storeys_with_nodes
     )
     
+    """
     print("storey nodes")
     for kv in storey_to_nodes.items():
         print(*kv)
+    """
         
     def yield_stair_paths():
         
         for i in range(len(storeys_with_nodes) - 1):
-            print("storey", i)
+            # print("storey", i)
             sa, sb = storeys_with_nodes[i], storeys_with_nodes[i+1]
             if sa + 1 == sb:
                 for na, nb in itertools.product(storey_to_nodes[sa], storey_to_nodes[sb]):
@@ -1398,7 +1402,7 @@ def process_landings():
                             # contains another stair point intermediate in path, skip
                             pass
                         else:
-                            print("path", path[0], "->", path[-1])
+                            # print("path", path[0], "->", path[-1])
                             yield path
         
     results = []

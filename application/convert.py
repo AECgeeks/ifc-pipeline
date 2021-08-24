@@ -37,8 +37,10 @@ if orient:
         bpy.ops.object.editmode_toggle()
 
 if split:
+    """
     for ob in bpy.data.objects:
         print(ob.name)
+    """
     get_id = lambda nm: nm.split('.')[0].split('-')[-1]
     for id in {get_id(ob.name) for ob in bpy.data.objects}:
         if components:

@@ -108,8 +108,9 @@ def get_check_progress(id):
     
     fn = utils.storage_file_for_id(id + "_0", "glb", output=True)
     fn2 = utils.storage_file_for_id(id, "json", output=True)
+    fn3 = utils.storage_file_for_id(id, "done", output=True)
     
-    if p == 100 and (os.path.exists(fn) or os.path.exists(fn2)):
+    if p == 100 and (os.path.exists(fn) or os.path.exists(fn2) or os.path.exists(fn3)):
         return jsonify({
             "status": "done",
             "id": id

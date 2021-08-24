@@ -65,7 +65,7 @@ def ensure_file(id, ext, **kwargs):
             client = Minio(os.environ.get("MINIO_HOST"), "minioadmin", "minioadmin", secure=False)
             if not client.bucket_exists("ifc-pipeline"):
                 client.make_bucket("ifc-pipeline")
-            print("ensure_file", id, ext)
+            # print("ensure_file", id, ext)
             try:
                 client.fget_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
             except: pass
@@ -78,7 +78,7 @@ def store_file(id, ext):
         if not client.bucket_exists("ifc-pipeline"):
             client.make_bucket("ifc-pipeline")
         client.fput_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
-        print("store", id, ext)
+        # print("store", id, ext)
     else:
         # print("not storing", id, ext)
         pass
