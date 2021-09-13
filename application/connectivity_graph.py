@@ -319,15 +319,21 @@ class flow_field:
         return data
 
 
-    def get_mean(self, data):
+    def get_mean(self, data, heights_as_int=False):
         ints = numpy.int_(data / self.spacing)
         arr = numpy.zeros(self.global_sz, dtype=float)
         counts = numpy.zeros(self.global_sz, dtype=int)
-        highest = numpy.zeros(self.global_sz, dtype=float)
-        highest[:] = -1e9
+        highest = numpy.zeros(self.global_sz, dtype=int if heights_as_int else float)
+        highest[:] = -1e5
         
-        ints2 = ints[:,0:2] - self.global_mi[0:2]
-        for i,j,z,v in zip(*ints2.T[0:2], *data.T[2:4]):
+        ints2 = ints[:,0:3] - self.global_mi[0:3]
+        
+        if heights_as_int:
+            iterable = zip(*ints2.T[0:3], *data.T[3:4])
+        else:
+            iterable = zip(*ints2.T[0:2], *data.T[2:4])
+        
+        for i,j,z,v in iterable:
             if v > arr[i,j]:
                 arr[i,j] = v
             counts[i,j] += 1
@@ -537,9 +543,260 @@ def process_doors():
             "results": results
         }, f)
 
+MAX_STEP_LENGTH = 1. / flow.spacing
+
+from aabbtree import AABB, AABBTree
+import networkx as nx
+
+@dataclass(eq=True, frozen=True)
+class riser:
+    xy : Any
+    norm: Any
+    heights: Any
+    width: Any
+    
+    @staticmethod
+    def tupelize(a):
+        if isinstance(a, numpy.ndarray):
+            a = a.flatten().tolist()
+        if isinstance(a, list):
+            return tuple(a)
+        return a
+    
+    def points_gen(self):
+        nx = self.norm.copy()
+        nx[:] = -nx[1], -nx[0]
+        for dx, dy, dz in itertools.product((-self.width / 2., +self.width / 2.), (0., MAX_STEP_LENGTH), self.heights):
+            lxy = dx * nx + self.norm * dy + self.xy
+            lxy = numpy.concatenate((lxy, [dz]))
+            yield lxy
+            
+    @property
+    def points(self):
+        return numpy.array(list(self.points_gen()))
+            
+    def obj_export(self, obj, offset):
+        obj.write(self.points * flow.spacing + offset, [(1,5,4,0)])
+        
+    @property
+    def aabb(self):
+        pts = self.points
+        return AABB(list(zip(pts.min(axis=0), pts.max(axis=0) + 0.1)))
+        
+    def to_tuple(self):
+        return tuple(map(riser.tupelize, (
+            self.xy,
+            self.norm,
+            self.heights,
+            self.width
+        )))
+
+    def __hash__(self):
+        # because ndarray is not hashable by default
+        return hash(self.to_tuple())
+        
+    def __eq__(self, other):
+        # because ndarray.__eq__ returns an ndarray
+        return self.to_tuple() == other.to_tuple()
+
+
+class obj_model:
+    def __init__(self, fn):
+        self.F = open(fn, "w")
+        self.G = open(fn[:-4] + ".mtl", "w")
+        self.vs = []
+        self.fs = []
+        self.N = 1
+        self.object_count = 1
+        print("mtlib", os.path.basename(fn)[:-4] + ".mtl", file=self.G)
+        
+    def add_material(self, nm, clr):
+        print("newmtl", nm, file=self.G)
+        print("Kd", *clr, file=self.G)
+        
+    def use_material(self, nm):
+        print("usemtl", nm, file=self.F)
+        
+    def write(self, vs, idxs, g=None):
+        if not idxs:
+            return
+            
+        if g is None:
+            g = "object-%003d" % self.object_count
+            
+        self.object_count += 1
+            
+        print("g", g, file=self.F)
+        
+        assert min(min(i) for i in idxs) >= 0
+        assert max(max(i) for i in idxs) < len(vs)
+        
+        for v in vs:
+            print("v", *v, file=self.F)
+        for f in idxs:
+            print("f", *(i + self.N for i in f), file=self.F)
+            
+        self.N += len(vs)
+
 
 def process_risers():
-    import pdb; pdb.set_trace()
+    
+    mi = flow.flow_ints[:,2].min()
+    ma = flow.flow_ints[:,2].max()
+    stp = 10
+    
+    num_steps = int(numpy.ceil((ma-mi)/stp))
+    
+    risers = set()
+    riser_list = []
+    riser_tree = AABBTree()
+    
+    for ii in range(num_steps):
+        i = mi + ii * stp
+        
+        print(i)
+    
+        mask = numpy.logical_and(
+            flow.flow_ints[:,2] >= i,
+            flow.flow_ints[:,2] < i + stp + stp // 2
+        )
+        x, y, arr, heights = flow.get_mean(flow.flow[mask], heights_as_int=True)
+        xmin = x.data.min()
+        ymin = y.data.min()
+        
+        heights_clean = heights.copy()
+        for h in numpy.unique(heights):
+            hh = heights == h
+            labels, n = ndimage.label(hh)
+            for i in range(1, n+1):
+                hhl = labels == i
+                if numpy.count_nonzero(hhl) < 5:
+                    heights_clean.mask[hhl] = True
+                           
+        # plt.imshow(heights)        
+        
+        edges = numpy.abs(numpy.diff(heights_clean)) > (flow.spacing + 1.e-4)
+        
+        edge_pts = numpy.column_stack(numpy.ma.where(edges))
+        
+        if edge_pts.size == 0:
+            # plt.show()
+            continue       
+        
+        ept_tree = KDTree(edge_pts)
+        pairs = numpy.array(list(ept_tree.query_pairs(numpy.sqrt(2.)+1.e-3)))
+        del ept_tree
+        
+        idxs, cnts = numpy.unique(pairs.flatten(), return_counts=True)
+        corners = edge_pts[idxs[cnts == 1]]
+        
+        # plt.scatter(corners.T[1] + 0.5, corners.T[0] + 0.5)
+        
+        G = nx.Graph()
+        G.add_edges_from(pairs)
+        
+        for nds in nx.connected_components(G):
+            cmp = G.subgraph(nds)
+            cnt = nx.barycenter(cmp)
+            cntxy = numpy.average(edge_pts[cnt], axis=0) + 0.5
+            
+            xy2 = edge_pts[list(cmp[cnt[0]])[0:2]]
+            dxy = numpy.float64(xy2[1] - xy2[0])
+            dxy /= numpy.linalg.norm(dxy)
+            dxy[:] = dxy[1], dxy[0]
+
+            a = numpy.int_(cntxy - dxy)
+            b = numpy.int_(cntxy + dxy)
+            
+            ha = heights[a[0], a[1]]
+            hb = heights[b[0], b[1]]
+                                  
+            if numpy.ma.masked in [ha, hb]:
+                continue
+                
+            if ha > hb:
+                dxy *= -1
+                ha, hb = hb, ha
+
+            # plt.scatter(cntxy[1], cntxy[0])
+            
+            ln = numpy.row_stack((cntxy, cntxy + dxy))
+            
+            # plt.plot(ln.T[1], ln.T[0])
+            
+            pr = list(nx.periphery(cmp))[0:2]
+            a, b = edge_pts[pr]
+            L = numpy.linalg.norm(b - a)
+            
+            R = riser(cntxy, dxy, [ha, hb], L)
+            print(R.aabb)
+            
+            if R not in risers:
+                risers.add(R)
+                riser_tree.add(R.aabb, len(riser_list))
+                riser_list.append(R)
+                print(f"Adding {R}")
+            else:
+                print(f"{R} already present")
+    
+    riser_graph = nx.Graph()
+    
+    for i,r in enumerate(riser_list):
+        for j in riser_tree.overlap_values(r.aabb):
+            riser_graph.add_edge(i, j)
+    
+    results = []
+    
+    for N, nds in enumerate([sg for sg in nx.connected_components(riser_graph) if len(sg) >= 3]):
+        obj = obj_model("%s_%d.obj" % (id, N))
+        obj.add_material("red",   (1.0, 0.0, 0.0))
+        obj.add_material("green", (0.0, 1.0, 0.0))
+
+        # Find relating element by bounding box search, not very robust,
+        # awaiting change to IfcOpenShell to use exact distance
+        c = Counter()
+
+        for n in nds:
+            yy, xx = riser_list[n].xy
+            p = numpy.float64(numpy.concatenate(([yy], [xx], [riser_list[n].heights[0]])))
+            p *= flow.spacing
+            p += (ymin, xmin, 0.)
+            
+            lower = p - (0.1,0.1,0.5)
+            upper = p + (0.1,0.1,0.1)
+                       
+            box = (tuple(map(float, lower)), tuple(map(float, upper)))
+            for inst in tree.select_box(box):
+                if not inst.is_a("IfcSpace"):
+                    if inst.Decomposes:
+                        inst = inst.Decomposes[0].RelatingObject
+                    c.update([inst])
+
+        ifc_elem = c.most_common(1)[0][0] if len(c) else None
+        
+        st = "NOTICE" if ifc_elem and ifc_elem.is_a("IfcStair") else "ERROR"
+        obj.use_material("red" if st == "ERROR" else "green")
+        
+        for n in nds:
+            riser_list[n].obj_export(obj, (ymin, xmin, 0.))
+            
+        desc = {
+            "status": st,
+            "numRisers": len(nds),
+            "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
+            "guid": ifc_elem.GlobalId if ifc_elem else None
+        }
+        
+        results.append(desc)
+            
+    with open(id + ".json", "w") as f:
+        json.dump({
+            "id": id,
+            "results": results
+        }, f)
+            
+    # nx.draw(riser_graph)
+    # plt.show()
 
 
 class connectivity_graph:
