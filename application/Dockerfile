@@ -11,7 +11,7 @@ RUN /conda/bin/conda install -y python=3.8 numba numpy matplotlib scipy scikit-i
 RUN /conda/bin/conda install -y -c conda-forge pythonocc-core
 ENV PATH="/conda/bin:${PATH}"
 
-RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham
+RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham scikit-learn minio
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
 ## 3D output conversion: Move to voxel?
@@ -21,15 +21,12 @@ RUN cmake .. && make install
 RUN mv COLLADA2GLTF-bin /usr/local/bin
 
 # IfcConvert v0.6.0
-RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.6.0-ff7219b-linux64.zip -O /tmp/IfcConvert.zip
+RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.6.0-721fe47-linux64.zip -O /tmp/IfcConvert.zip
 RUN unzip /tmp/IfcConvert.zip -d /usr/bin
 
-RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.6.0-ff7219b-linux64.zip
+RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.6.0-721fe47-linux64.zip
 RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
-
-# Temporary 'hotfix'
-RUN wget  -O `python3 -c 'import site; print(site.getusersitepackages())'`/ifcopenshell/validate.py https://raw.githubusercontent.com/IfcOpenShell/IfcOpenShell/v0.6.0/src/ifcopenshell-python/ifcopenshell/validate.py
 
 WORKDIR /www/static
 RUN npm i -D @babel/preset-env @babel/core @babel/cli
@@ -58,7 +55,5 @@ WORKDIR /www
 COPY application/*.py /www/
 COPY application/templates /www/templates
 RUN sed -i "4i<script>console.log('pipeline version: $(cat /version)');</script>" /www/templates/*.html
-
-RUN python3 -m pip install minio
 
 WORKDIR /www
