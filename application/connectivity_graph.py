@@ -36,6 +36,7 @@ else:
         def __getitem__(self, _):
             return self
     plt = whatever()
+    matplotlib = whatever()
 
 import pandas as pd
 
@@ -565,18 +566,28 @@ class riser:
     
     def points_gen(self):
         nx = self.norm.copy()
-        nx[:] = -nx[1], -nx[0]
+        nx[:] = -nx[1], nx[0]
         for dx, dy, dz in itertools.product((-self.width / 2., +self.width / 2.), (0., MAX_STEP_LENGTH), self.heights):
             lxy = dx * nx + self.norm * dy + self.xy
-            lxy = numpy.concatenate((lxy, [dz]))
-            yield lxy
+            lxyz = numpy.concatenate((lxy, [dz]))
+            yield (lxyz + flow.global_mi[0:3]) * flow.spacing
             
     @property
     def points(self):
         return numpy.array(list(self.points_gen()))
+        
+    @property
+    def bottom_center(self):
+        lxyz = numpy.concatenate((self.xy, [self.heights[0]]))
+        return (lxyz + flow.global_mi[0:3]) * flow.spacing
+        
+    @property
+    def center(self):
+        lxyz = numpy.concatenate((self.xy, [(self.heights[0] + self.heights[1]) / 2.]))
+        return (lxyz + flow.global_mi[0:3]) * flow.spacing
             
-    def obj_export(self, obj, offset):
-        obj.write(self.points * flow.spacing + offset, [(1,5,4,0)])
+    def obj_export(self, obj):
+        obj.write(self.points[[1,5,4,0]], [(0,1,2,3)])
         
     @property
     def aabb(self):
@@ -586,7 +597,8 @@ class riser:
     def to_tuple(self):
         return tuple(map(riser.tupelize, (
             self.xy,
-            self.norm,
+            # exclude norm because it is fitted using pca and apparently not fully deterministic?
+            # self.norm,
             self.heights,
             self.width
         )))
@@ -638,12 +650,16 @@ class obj_model:
             
         self.N += len(vs)
 
+import scipy
+from sklearn import decomposition
 
 def process_risers():
     
+    f = plt.figure(figsize=(12,12))
+    
     mi = flow.flow_ints[:,2].min()
     ma = flow.flow_ints[:,2].max()
-    stp = 10
+    stp = 12
     
     num_steps = int(numpy.ceil((ma-mi)/stp))
     
@@ -654,15 +670,19 @@ def process_risers():
     for ii in range(num_steps):
         i = mi + ii * stp
         
-        print(i)
+        # print(i)
     
         mask = numpy.logical_and(
             flow.flow_ints[:,2] >= i,
             flow.flow_ints[:,2] < i + stp + stp // 2
         )
         x, y, arr, heights = flow.get_mean(flow.flow[mask], heights_as_int=True)
-        xmin = x.data.min()
-        ymin = y.data.min()
+        
+        del x
+        del y
+        del arr
+        
+        print(f"[ {i}, {i + stp + stp // 2} )  ->  [ {heights.min()},  {heights.max()} ]")
         
         heights_clean = heights.copy()
         for h in numpy.unique(heights):
@@ -672,41 +692,65 @@ def process_risers():
                 hhl = labels == i
                 if numpy.count_nonzero(hhl) < 5:
                     heights_clean.mask[hhl] = True
-                           
-        # plt.imshow(heights)        
+               
+
+        norm = matplotlib.colors.Normalize(vmin=mi, vmax=ma)
         
-        edges = numpy.abs(numpy.diff(heights_clean)) > (flow.spacing + 1.e-4)
+        # this does not work, diff is only 1d       
+        # edges = numpy.abs(numpy.diff(heights_clean)) > (flow.spacing + 1.e-4)
         
-        edge_pts = numpy.column_stack(numpy.ma.where(edges))
+        grad = numpy.gradient(heights_clean, 1.);
+        edges = numpy.abs(grad[0] * grad[1])
+        
+        plt.clf()
+        plt.imshow(edges, norm=norm)        
+        plt.savefig("gradient-%02d.png" % ii, dpi=450)
+
+        plt.clf()
+
+        plt.imshow(heights + flow.global_mi[2], norm=norm)        
+        
+        edge_pts = numpy.column_stack(numpy.ma.where(edges > 1.))
         
         if edge_pts.size == 0:
-            # plt.show()
+            print("no edges...")
             continue       
         
         ept_tree = KDTree(edge_pts)
         pairs = numpy.array(list(ept_tree.query_pairs(numpy.sqrt(2.)+1.e-3)))
         del ept_tree
         
-        idxs, cnts = numpy.unique(pairs.flatten(), return_counts=True)
-        corners = edge_pts[idxs[cnts == 1]]
-        
-        # plt.scatter(corners.T[1] + 0.5, corners.T[0] + 0.5)
+        # we no longer use these corners, but rather the connected component graph periphery
+        # idxs, cnts = numpy.unique(pairs.flatten(), return_counts=True)
+        # corners = edge_pts[idxs[cnts == 1]]
+        # with gradient() we no longer add 0.5
+        # plt.scatter(corners.T[1] + 0.5, corners.T[0] + 0.5, s=1)
+        # plt.scatter(corners.T[1], corners.T[0], s=1)
         
         G = nx.Graph()
         G.add_edges_from(pairs)
         
         for nds in nx.connected_components(G):
+        
+            all_pts = numpy.array(list(map(edge_pts.__getitem__, nds)))
+            plt.scatter(all_pts.T[1], all_pts.T[0], s=0.3)
+            
+            if len(nds) < 3:
+                continue            
+        
             cmp = G.subgraph(nds)
             cnt = nx.barycenter(cmp)
-            cntxy = numpy.average(edge_pts[cnt], axis=0) + 0.5
+            cntxy = numpy.average(edge_pts[cnt], axis=0)# + 0.5
             
-            xy2 = edge_pts[list(cmp[cnt[0]])[0:2]]
-            dxy = numpy.float64(xy2[1] - xy2[0])
+            nodes_from_center = list(set(sum([list(nx.dfs_preorder_nodes(cmp, source=c, depth_limit=4)) for c in cnt], [])))
+            points_from_center = numpy.array(list(map(edge_pts.__getitem__, nodes_from_center)))
+            pca = decomposition.PCA(n_components=2)
+            pca.fit(points_from_center)
+            dxy = pca.components_[1]
             dxy /= numpy.linalg.norm(dxy)
-            dxy[:] = dxy[1], dxy[0]
 
-            a = numpy.int_(cntxy - dxy)
-            b = numpy.int_(cntxy + dxy)
+            a = numpy.int_(cntxy - dxy * 2)
+            b = numpy.int_(cntxy + dxy * 2)
             
             ha = heights[a[0], a[1]]
             hb = heights[b[0], b[1]]
@@ -718,18 +762,23 @@ def process_risers():
                 dxy *= -1
                 ha, hb = hb, ha
 
-            # plt.scatter(cntxy[1], cntxy[0])
+            plt.scatter(cntxy[1], cntxy[0], marker="*", s=1)
             
-            ln = numpy.row_stack((cntxy, cntxy + dxy))
+            ln = numpy.row_stack((cntxy, cntxy + dxy * 3))
             
-            # plt.plot(ln.T[1], ln.T[0])
+            plt.plot(ln.T[1], ln.T[0], linewidth=0.2)
             
-            pr = list(nx.periphery(cmp))[0:2]
-            a, b = edge_pts[pr]
-            L = numpy.linalg.norm(b - a)
+            pr = list(nx.periphery(cmp))
+            
+            pr_pts = numpy.array(list(map(edge_pts.__getitem__, pr)))
+            plt.scatter(pr_pts.T[1], pr_pts.T[0], s=1, facecolors='none', edgecolors='r', linewidth=0.2)
+            
+            # use distance matrix, so that in case of multiple end points the largest pairwise distance can be picked
+            L = numpy.max(scipy.spatial.distance_matrix(pr_pts, pr_pts))
             
             R = riser(cntxy, dxy, [ha, hb], L)
-            print(R.aabb)
+            
+            # print(R.aabb)
             
             if R not in risers:
                 risers.add(R)
@@ -738,11 +787,18 @@ def process_risers():
                 print(f"Adding {R}")
             else:
                 print(f"{R} already present")
+                pass
+                
+        plt.savefig("range-%02d.png" % ii, dpi=450)
     
     riser_graph = nx.Graph()
     
     for i,r in enumerate(riser_list):
         for j in riser_tree.overlap_values(r.aabb):
+            print(numpy.arccos(riser_list[i].norm @ riser_list[j].norm))
+            if numpy.arccos(riser_list[i].norm @ riser_list[j].norm) > numpy.pi / 4:
+                # incorporate an angle check to get consistent values due to rotated risers            
+                continue
             riser_graph.add_edge(i, j)
     
     results = []
@@ -757,28 +813,19 @@ def process_risers():
         c = Counter()
 
         for n in nds:
-            yy, xx = riser_list[n].xy
-            p = numpy.float64(numpy.concatenate(([yy], [xx], [riser_list[n].heights[0]])))
-            p *= flow.spacing
-            p += (ymin, xmin, 0.)
-            
-            lower = p - (0.1,0.1,0.5)
-            upper = p + (0.1,0.1,0.1)
-                       
-            box = (tuple(map(float, lower)), tuple(map(float, upper)))
-            for inst in tree.select_box(box):
+            p = riser_list[n].bottom_center
+            pp = tuple(map(float, p))
+            for inst in tree.select(pp, extend=0.1):
                 if not inst.is_a("IfcSpace"):
-                    if inst.Decomposes:
-                        inst = inst.Decomposes[0].RelatingObject
                     c.update([inst])
 
         ifc_elem = c.most_common(1)[0][0] if len(c) else None
         
-        st = "NOTICE" if ifc_elem and ifc_elem.is_a("IfcStair") else "ERROR"
+        st = "NOTICE" if ifc_elem and ifc_elem.is_a("IfcStair") or ifc_elem.is_a("IfcStairFlight") else "ERROR"
         obj.use_material("red" if st == "ERROR" else "green")
         
         for n in nds:
-            riser_list[n].obj_export(obj, (ymin, xmin, 0.))
+            riser_list[n].obj_export(obj)
             
         desc = {
             "status": st,
