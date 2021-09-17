@@ -912,6 +912,10 @@ def process_landings(args, context):
 
 def process_routes(args, context):
     process_connectivity_graph(args, context, "routes")
+    
+    
+def process_risers(args, context):
+    process_connectivity_graph(args, context, "risers")
 
 
 def process_non_voxel_check(command, args, id, ids, **kwargs):
@@ -1193,6 +1197,16 @@ def landings(id, config, **kwargs):
         make_script_3_31,
         process_landings,
         {'length': length},
+        id,
+        config['ids'],
+        **kwargs)
+
+
+def risers(id, config, **kwargs):
+    process_voxel_check(
+        make_script_3_31,
+        process_risers,
+        {},
         id,
         config['ids'],
         **kwargs)
