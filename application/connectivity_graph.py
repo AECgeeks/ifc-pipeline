@@ -659,7 +659,7 @@ def process_risers():
     
     mi = flow.flow_ints[:,2].min()
     ma = flow.flow_ints[:,2].max()
-    stp = 12
+    stp = 10
     
     num_steps = int(numpy.ceil((ma-mi)/stp))
     
@@ -700,17 +700,20 @@ def process_risers():
         # edges = numpy.abs(numpy.diff(heights_clean)) > (flow.spacing + 1.e-4)
         
         grad = numpy.gradient(heights_clean, 1.);
-        edges = numpy.abs(grad[0] * grad[1])
-        
-        plt.clf()
-        plt.imshow(edges, norm=norm)        
-        plt.savefig("gradient-%02d.png" % ii, dpi=450)
+                
+        # plt.clf()
+        # plt.imshow(numpy.row_stack(grad), norm=norm)
+        # plt.savefig("gradient-%02d.png" % ii, dpi=450)
 
         plt.clf()
-
         plt.imshow(heights + flow.global_mi[2], norm=norm)        
         
-        edge_pts = numpy.column_stack(numpy.ma.where(edges > 1.))
+        edge_pts = numpy.column_stack(numpy.ma.where(
+            numpy.logical_or(
+                numpy.abs(grad[0]) > 1.,
+                numpy.abs(grad[1]) > 1.
+            )
+        ))
         
         if edge_pts.size == 0:
             print("no edges...")
@@ -795,7 +798,6 @@ def process_risers():
     
     for i,r in enumerate(riser_list):
         for j in riser_tree.overlap_values(r.aabb):
-            print(numpy.arccos(riser_list[i].norm @ riser_list[j].norm))
             if numpy.arccos(riser_list[i].norm @ riser_list[j].norm) > numpy.pi / 4:
                 # incorporate an angle check to get consistent values due to rotated risers            
                 continue
