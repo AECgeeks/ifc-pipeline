@@ -288,7 +288,7 @@ class ifc_element:
             
     def outwards_direction(self):
         def read(p):
-            return flow.lookup(p[0:3], max_dist=0.4)
+            return flow.lookup(p[0:3], max_dist=0.6)
             # d, i = tree.query(p[0:3])
             # if d > 0.4:
             #     raise ValueError("%f > 0.4" % d)
@@ -2255,7 +2255,11 @@ def process_entrance():
                 
             ob.draw(plt.gca())
         
-            fdir = ob.outwards_direction()
+            try:
+                fdir = ob.outwards_direction()
+            except ValueError as e:
+                continue
+                
             plt.arrow(ob.center[0], ob.center[1], fdir[0] * 2., fdir[1] * 2., color='gray')
             
             dims = numpy.array([width, depth, (ob.bounds[1][2] - ob.bounds[0][2]) - 0.1, 0])
