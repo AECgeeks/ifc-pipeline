@@ -20,7 +20,7 @@ import numpy
 import skimage
 from numpy.ma import masked_array
 
-WITH_PLOT = False
+WITH_PLOT = True
 if WITH_PLOT:
     import matplotlib
     from matplotlib import pyplot as plt
@@ -60,9 +60,53 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 
+import OCC.Core.BRep
+import OCC.Core.BRepGProp
+import OCC.Core.BRepTools
+import OCC.Core.TopTools
+import OCC.Core.TopoDS
+import OCC.Core.TopExp
+import OCC.Core.BRepPrimAPI
+
+from OCC.Core.TopAbs import *
+
 from ifc_utils import get_unit
 
 normalize = lambda v: v / numpy.linalg.norm(v)
+
+
+def yield_subshapes(s, type=None, vertices=False):
+    """
+    Based on type in `s` and additional keyword arguments
+    initialize an OCCT iterator or explorer and yield its
+    values.
+    """
+    if isinstance(s, OCC.Core.TopTools.TopTools_ListOfShape):
+        it = OCC.Core.TopTools.TopTools_ListIteratorOfListOfShape(s)
+    else:
+        if type is None:
+            if s.ShapeType() == TopAbs_WIRE:
+                it = OCC.Core.BRepTools.BRepTools_WireExplorer(s)
+            else:
+                it = OCC.Core.TopoDS.TopoDS_Iterator(s)
+        else:
+            it = OCC.Core.TopExp.TopExp_Explorer(s, type)
+    while it.More():
+        if isinstance(it, OCC.Core.BRepTools.BRepTools_WireExplorer) and vertices:
+            yield it.CurrentVertex()
+        elif hasattr(it, 'Value'):
+            yield it.Value()
+        else:
+            yield it.Current()
+        it.Next()
+
+        
+def to_tuple(xyz):
+    """
+    Converts gp_Pnt/Vec/Dir(2d) to python tuple
+    """
+    return (xyz.X(), xyz.Y()) + ((xyz.Z(),) if hasattr(xyz, "Z") else ())
+
 
 def wrap_try(fn):
     def inner(*args, **kwargs):
@@ -133,21 +177,21 @@ class ifc_element:
             numpy.ones((len(v) // 3, 1))
         ), axis=1)
         
-        bounds = numpy.vstack((
+        self.bounds = numpy.vstack((
             numpy.min(V, axis=0),
             numpy.max(V, axis=0)))
             
-        c = numpy.average(bounds, axis=0)
-        c[2] = bounds[0][2]
+        c = numpy.average(self.bounds, axis=0)
+        c[2] = self.bounds[0][2]
             
         self.center = self.M @ c
         self.VV = numpy.array([self.M @ v for v in V])
         
-        Mi = numpy.linalg.inv(self.M)
+        self.Mi = numpy.linalg.inv(self.M)
         
         self.pts = [
-            self.center - Mi[1] * 0.2,
-            self.center + Mi[1] * 0.2
+            self.center - self.Mi[1] * 0.2,
+            self.center + self.Mi[1] * 0.2
         ]
     
     def draw(self, ax, use_2d=True, color='black'):
@@ -240,6 +284,22 @@ class ifc_element:
             print("f", *(indices[0] + obj_c), file=obj)
             print("f", *(indices[1] + obj_c), file=obj)
             obj_c += 4
+            
+            
+    def outwards_direction(self):
+        def read(p):
+            return flow.lookup(p[0:3], max_dist=0.4)
+            # d, i = tree.query(p[0:3])
+            # if d > 0.4:
+            #     raise ValueError("%f > 0.4" % d)
+            # return values[i]
+        
+        vals = list(map(read, self.pts))
+        d = self.Mi[1][0:3].copy()
+        if vals[0] < vals[1]:
+            d[:] *= -1
+        return d
+
         
     def validate(self, flow):    
         if self.geom is None:
@@ -2130,6 +2190,157 @@ def process_routes():
         mlab.show()
 
 
+def process_entrance():
+
+    with open("mtl.mtl", 'w') as f:
+        f.write("newmtl red\n")
+        f.write("Kd 1.0 0.0 0.0\n\n")
+        f.write("newmtl orange\n")
+        f.write("Kd 1.0 0.5 0.0\n\n")
+        f.write("newmtl green\n")
+        f.write("Kd 0.0 1.0 0.0 \n\n")
+
+    results = []
+    
+    width = config.get('width', 1.5)
+    depth = config.get('depth', 1.5)
+    
+    doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
+    is_external = lambda inst: ifcopenshell.util.element.get_psets(inst).get('Pset_DoorCommon', {}).get('IsExternal', False) is True
+    external_doors = list(filter(is_external, doors))
+    
+    shapes = list(map(create_shape, external_doors))
+    objs = list(map(ifc_element, external_doors, shapes))
+
+    for storey_idx, (mi, ma) in enumerate(elev_pairs):    
+    
+        plt.clf()
+        plt.figure(figsize=(8,12))
+        plt.gca().set_aspect('equal')
+        plt.gca().set_xlabel('x')
+        plt.gca().set_ylabel('y')
+    
+        storey = storeys[storey_idx]
+        flow_mi_ma = flow.get_slice(mi - 1, ma)
+        
+        plt.gca().scatter(flow_mi_ma.T[0], flow_mi_ma.T[1], marker='s', s=1, norm=flow.norm, c=(flow_mi_ma.T[3] -1.) * flow.spacing, label='distance from exterior')    
+        
+        settings = ifcopenshell.geom.settings(
+            USE_PYTHON_OPENCASCADE=False
+        )
+        
+        # depend on elevation rather than containment relationship
+        # as is done in other checks.
+        # 
+        # elems = None
+        # if storey.ContainsElements:
+        #     elems = list(set(storey.ContainsElements[0].RelatedElements) & set(external_doors))
+        #     
+        # if not elems:
+        #     continue
+            
+        flow_mi_ma = flow.get_slice(mi - 1, ma)
+        
+        if not flow_mi_ma.size:
+            continue
+        
+        for ob in objs:
+            if ob.M is None:
+                continue
+                
+            Z = ob.M[2,3] + 1.
+            if Z < mi or Z > ma:
+                # this shouldn't happen
+                continue
+                
+            ob.draw(plt.gca())
+        
+            fdir = ob.outwards_direction()
+            plt.arrow(ob.center[0], ob.center[1], fdir[0] * 2., fdir[1] * 2., color='gray')
+            
+            dims = numpy.array([width, depth, (ob.bounds[1][2] - ob.bounds[0][2]) - 0.1, 0])
+            # don't move Y inwards
+            dims2 = dims.copy()
+            dims2[1] = 0
+            
+            c = numpy.average(ob.bounds, axis=0)
+            # Y outwards
+            if fdir @ ob.M.T[1][0:3] > 0.:
+                c[1] = ob.bounds[1][1]
+                c[1] += 0.1
+            else:
+                c[1] = ob.bounds[0][1]
+                c[1] -= 0.1
+                # in this case local X is reversed
+                dims2[0] *= -1.                
+            
+            lower_corner = ob.M @ (c - dims2 / 2.)
+            
+            ax = OCC.Core.gp.gp_Ax2(
+                OCC.Core.gp.gp_Pnt(*tuple(map(float, lower_corner[0:3]))),
+                OCC.Core.gp.gp_Dir(*tuple(map(float, ob.M.T[2][0:3]))),
+                OCC.Core.gp.gp_Dir(*tuple(map(float, numpy.cross(fdir, ob.M.T[2][0:3])))) # y × z = x
+            )
+            
+            plt.arrow(ob.center[0], ob.center[1], ax.XDirection().X(), ax.XDirection().Y(), color='red')
+            plt.arrow(ob.center[0], ob.center[1], ax.YDirection().X(), ax.YDirection().Y(), color='green')
+            
+            dxdydz = tuple(map(float, dims[0:3]))
+            
+            bounds_diff = ob.bounds[1] - ob.bounds[0]
+            if numpy.count_nonzero(bounds_diff >= 0.5) < 2 or bounds_diff[2] <= 0.5:
+                # quick check to remove small doors, or misclassified doors
+                continue
+            
+            try:
+                box = OCC.Core.BRepPrimAPI.BRepPrimAPI_MakeBox(
+                    ax, *dxdydz).Solid()
+            except:
+                continue
+                
+            valid = len(set(i.is_a() for i in tree.select(box)) - {'IfcOpeningElement', 'IfcSpace'}) == 0
+            
+            if not valid:
+                st = "ERROR"
+                clr = "red"
+            else:
+                st = "NOTICE"
+                clr = "green"
+                
+            with open("%s_%d.obj" % (id, len(results)), "w") as obj:
+                obj_c = 1
+                
+                print('mtllib mtl.mtl\n', file=obj)
+                print('usemtl %s\n' % clr, file=obj)
+                
+                for face in yield_subshapes(box, TopAbs_FACE):
+                    wire = OCC.Core.BRepTools.breptools_OuterWire(face)
+                    vertices = list(yield_subshapes(wire, vertices=True))
+                    points = list(map(OCC.Core.BRep.BRep_Tool.Pnt, vertices))
+                    xyzs = list(map(to_tuple, points))
+                    xyzs_np = numpy.array(xyzs)
+                    
+                    if numpy.cross(xyzs_np[0], xyzs_np[1])[2] > 0.99:
+                        cycle = numpy.concatenate((xyzs_np, [xyzs_np[0]]), axis=0)
+                        plt.plot(cycle.T[0], cycle.T[1], c=clr)
+                    
+                    for xyz in xyzs:
+                        print("v", *xyz, file=obj)
+                        
+                    print("f", *range(obj_c, len(xyzs)+obj_c), file=obj)
+                    
+                    obj_c += len(xyzs)
+            
+            desc = {
+                "status": st,
+                "guid": ob.inst.GlobalId,
+                "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, len(results)),
+            }
+            
+            results.append(desc)
+        
+        plt.savefig("flow-%d.png" % (storey_idx), dpi=150)
+
 if command == "doors":
     process_doors()
 elif command == "landings":
@@ -2138,7 +2349,9 @@ elif command == "routes":
 	process_routes()
 elif command == "risers":
 	process_risers()
-
+elif command == "entrance":
+	process_entrance()
+    
 try:
     for fn in glob.glob("*.obj"):
         subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--", fn, fn.replace(".obj", ".dae")])
