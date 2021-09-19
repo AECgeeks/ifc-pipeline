@@ -1179,7 +1179,7 @@ def landings(id, config, **kwargs):
     process_voxel_check(
         make_script_connectivity_graph,
         functools.partial(process_connectivity_graph, "landings"),
-        {'length': length},
+        {'length': length * 0.5},
         id,
         config['ids'],
         **kwargs)
