@@ -779,7 +779,7 @@ def process_3_26(entity, args, context):
             yield fn2
         
     # split mesh into separate DAE files
-    subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--", *simplify(), os.path.join(d, "%s.dae")])
+    subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--orient", "--", *simplify(), os.path.join(d, "%s.dae")])
     
     collected = []
     

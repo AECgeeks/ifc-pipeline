@@ -80,7 +80,7 @@ with open(ifn, 'r+') as f:
     f.writelines(ls)
 
 # --orient causes issues?
-subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--split", "--components", "--", "simplified.obj", os.path.abspath("%s.dae")])
+subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--split", "--orient", "--components", "--", "simplified.obj", os.path.abspath("%s.dae")])
 
 results = []
 for i, (inst, names) in enumerate(name_mapping.items()):
