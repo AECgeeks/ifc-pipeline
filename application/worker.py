@@ -828,7 +828,7 @@ def process_3_26(entity, args, context):
     utils.store_file(context.id, "json")
 
 
-def make_script_3_31(args):
+def make_script_connectivity_graph(args):
     return """file = parse("*.ifc")
 surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
 slabs = create_geometry(file, include={"IfcSlab"})
@@ -884,7 +884,7 @@ export_csv(flow_masked, "flow.csv")
 mesh(flow_masked, "flow.obj")
 """
 
-def process_connectivity_graph(args, context, command):
+def process_connectivity_graph(command, args, context):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
     
     subprocess.check_call([
@@ -900,22 +900,6 @@ def process_connectivity_graph(args, context, command):
     utils.store_file(context.id, "json")
     for fn in glob.glob(os.path.join(context.path, "*.glb")):
         utils.store_file(os.path.basename(fn).split(".")[0], "glb")
-
-
-def process_3_31(args, context):
-    process_connectivity_graph(args, context, "doors")
-    
-    
-def process_landings(args, context):
-    process_connectivity_graph(args, context, "landings")
-
-
-def process_routes(args, context):
-    process_connectivity_graph(args, context, "routes")
-    
-    
-def process_risers(args, context):
-    process_connectivity_graph(args, context, "risers")
 
 
 def process_non_voxel_check(command, args, id, ids, **kwargs):
@@ -1142,7 +1126,6 @@ def stair_headroom(id, config, **kwargs):
         **kwargs)
 
 
-
 def ramp_headroom(id, config, **kwargs):
     height = config.get('height', 2.2)
     
@@ -1176,8 +1159,8 @@ def door_direction(id, config, **kwargs):
         return empty_result(d, id)
 
     process_voxel_check(
-        make_script_3_31,
-        process_3_31,
+        make_script_connectivity_graph,
+        functools.partial(process_connectivity_graph, "doors"),
         {},
         id,
         config['ids'],
@@ -1194,8 +1177,8 @@ def landings(id, config, **kwargs):
 
 
     process_voxel_check(
-        make_script_3_31,
-        process_landings,
+        make_script_connectivity_graph,
+        functools.partial(process_connectivity_graph, "landings"),
         {'length': length},
         id,
         config['ids'],
@@ -1204,8 +1187,8 @@ def landings(id, config, **kwargs):
 
 def risers(id, config, **kwargs):
     process_voxel_check(
-        make_script_3_31,
-        process_risers,
+        make_script_connectivity_graph,
+        functools.partial(process_connectivity_graph, "risers"),
         {},
         id,
         config['ids'],
@@ -1227,8 +1210,8 @@ def escape_routes(id, config, **kwargs):
         return empty_result(d, id)
 
     process_voxel_check(
-        make_script_3_31,
-        process_routes,
+        make_script_connectivity_graph,
+        functools.partial(process_connectivity_graph, "routes"),
         {'length': length},
         id,
         config['ids'],
@@ -1254,14 +1237,15 @@ def entrance_area(id, config, **kwargs):
         depth = float(depth)
     except:
         abort(400)
-    
-    process_non_voxel_check(
-        'entrance_area',
-        [width, depth],
+        
+    process_voxel_check(
+        make_script_connectivity_graph,
+        functools.partial(process_connectivity_graph, "entrance"),
+        {width: width, depth:depth},
         id,
         config['ids'],
         **kwargs)
-
+    
 
 def ramp_percentage(id, config, **kwargs):
     warning = config.get('warning', 6)
