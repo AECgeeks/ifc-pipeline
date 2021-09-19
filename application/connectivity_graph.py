@@ -153,6 +153,12 @@ class ifc_element:
         self.inst = inst
         self.geom = geom
         
+        self.is_external = False
+        psets = ifcopenshell.util.element.get_psets(self.inst)
+        for pn, pset in psets.items():
+            if pn.endswith("Common"):
+                self.is_external = pset.get('IsExternal', False) is True
+        
         self.width, self.height = None, None
         if hasattr(inst, "OverallWidth") and inst.OverallWidth is not None:
             self.width = inst.OverallWidth * lu
@@ -189,10 +195,17 @@ class ifc_element:
         
         self.Mi = numpy.linalg.inv(self.M)
         
-        self.pts = [
-            self.center - self.Mi[1] * 0.2,
-            self.center + self.Mi[1] * 0.2
-        ]
+        # this is a bit of a hack. we do not really start from external anymore,
+        # so sampling around the external doors is just sampling around the minimum
+        # which is symmetric for small distances. The only true solution is to do
+        # another traversal from the max value (masked by interior volume) to get
+        # a monotonic function around the external doors (in the opposite direction).
+        self.read_distance = 8 if self.is_external else 0.2
+        
+        self.pts = numpy.array([
+            self.center - self.Mi[1] * self.read_distance,
+            self.center + self.Mi[1] * self.read_distance
+        ])
     
     def draw(self, ax, use_2d=True, color='black'):
         if self.geom is None:
@@ -225,6 +238,10 @@ class ifc_element:
         
         for ab in list(vs[:,0:2][es]):
             ax.plot(ab.T[0], ab.T[1], color=color, lw=0.5)
+            
+        ax.scatter(self.pts.T[0], self.pts.T[1], color='green', s=2)
+            
+        ax.text(self.center[0], self.center[1], f"#{self.inst.id()}")
             
     def draw_arrow(self, ax):
         if self.geom is None:
@@ -288,13 +305,14 @@ class ifc_element:
             
     def outwards_direction(self):
         def read(p):
-            return flow.lookup(p[0:3], max_dist=0.6)
+            return flow.lookup(p[0:3], max_dist=0.6 if self.read_distance < 1. else self.read_distance)
             # d, i = tree.query(p[0:3])
             # if d > 0.4:
             #     raise ValueError("%f > 0.4" % d)
             # return values[i]
         
         vals = list(map(read, self.pts))
+        print(self.inst.id(), *vals)
         d = self.Mi[1][0:3].copy()
         if vals[0] < vals[1]:
             d[:] *= -1
@@ -306,7 +324,7 @@ class ifc_element:
             return
             
         def read(p):
-            return flow.lookup(p[0:3], max_dist=0.4)
+            return flow.lookup(p[0:3], max_dist=0.4 if self.read_distance < 1. else self.read_distance)
             # d, i = tree.query(p[0:3])
             # if d > 0.4:
             #     raise ValueError("%f > 0.4" % d)
@@ -314,6 +332,7 @@ class ifc_element:
         
         try:
             vals = list(map(read, self.pts))
+            print(self.inst.id(), *vals)
             self.valid = vals[0] > vals[1]
         except ValueError as e:
             pass
@@ -427,6 +446,7 @@ def process_doors():
     results = []
 
     result_mapping = {}
+    door_types = {}
 
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
     shapes = list(map(create_shape, doors))
@@ -554,11 +574,41 @@ def process_doors():
                     
                 for ax in axes:
                     ob.draw(ax)
-                ob.validate(flow)
+                    
+                needs_validation = False
+                is_valid = False
+                doortype = "unknown"
                 
-                # AttributeError: 'FancyArrow' object has no attribute 'do_3d_projection'
-                for ax in axes:
-                    ob.draw_arrow(ax)
+                obtype = ifcopenshell.util.element.get_type(ob.inst)
+                if obtype:
+                    if "DOUBLE_SWING" in obtype.OperationType:
+                        needs_validation = False
+                        is_valid = True
+                        doortype = "bidirectional"
+                    elif "SLIDING" in obtype.OperationType:
+                        needs_validation = False
+                        is_valid = True
+                        doortype = "slide"
+                    elif "FOLDING" in obtype.OperationType:
+                        needs_validation = False
+                        is_valid = True
+                        doortype = "fold"
+                    elif "REVOLVING" == obtype.OperationType:
+                        needs_validation = False
+                        is_valid = True
+                        doortype = "revolve"
+                    elif "SWING" in obtype.OperationType:
+                        needs_validation = True
+                        doortype = "swing"
+                    
+                if needs_validation:
+                    ob.validate(flow)
+                    
+                    # AttributeError: 'FancyArrow' object has no attribute 'do_3d_projection'
+                    for ax in axes:
+                        ob.draw_arrow(ax)
+                else:
+                    ob.valid = is_valid
 
                 if ob in result_mapping:
                     print("Warning element already emitted")
@@ -567,6 +617,7 @@ def process_doors():
                     fn = "%s_%d.obj" % (id, N)
                     ob.draw_quiver(flow, x_y_angle, fn)
                     result_mapping[ob] = N
+                    door_types[ob] = doortype
             
             
         for ob in wall_objs:
@@ -589,7 +640,8 @@ def process_doors():
         
         desc = {
             "status": st,
-            "guid": ob.inst.GlobalId
+            "guid": ob.inst.GlobalId,
+            "doorType": door_types.get(ob)
         }
         N = result_mapping.get(ob)
         
@@ -1970,13 +2022,9 @@ def process_routes():
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
     shapes = list(map(create_shape, doors))
     objs = list(map(ifc_element, doors, shapes))
-    
-    is_external_mapping = {}
-                
+                   
     for inst, dobj in zip(doors, objs):
-        is_external = ifcopenshell.util.element.get_psets(inst).get('Pset_DoorCommon', {}).get('IsExternal', False) is True
-        is_external_mapping[dobj] = is_external
-        if is_external:
+        if dobj.is_external:
             array_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
             node_idx = list(G.nodes)[array_idx]
             exterior_nodes.append(node_idx)
@@ -2039,7 +2087,7 @@ def process_routes():
             #     import pdb; pdb.set_trace()
 
             is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
-            is_external = is_external_mapping.get(dobj)
+            is_external = dobj.is_external
             
             if is_fire_door and not is_external:
             
@@ -2206,16 +2254,36 @@ def process_entrance():
     depth = config.get('depth', 1.5)
     
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
-    is_external = lambda inst: ifcopenshell.util.element.get_psets(inst).get('Pset_DoorCommon', {}).get('IsExternal', False) is True
-    external_doors = list(filter(is_external, doors))
+    # @todo not necessary to create shape for internal doors
+    shapes = list(map(create_shape, doors))
     
-    shapes = list(map(create_shape, external_doors))
-    objs = list(map(ifc_element, external_doors, shapes))
+    # incl internal
+    all_objs = list(map(ifc_element, doors, shapes))
+    # external only
+    objs = list(filter(operator.attrgetter('is_external'), all_objs))
+    
+    print(objs)
 
     for storey_idx, (mi, ma) in enumerate(elev_pairs):    
     
+        objects_on_storey = []
+        
+        for ob in objs:
+            if ob.M is None:
+                continue
+                
+            Z = ob.M[2,3] + 1.
+            if Z < mi or Z > ma:
+                continue
+                
+            objects_on_storey.append(ob)
+            
+        if not objects_on_storey:
+            print("no objects on storey")
+            continue    
+    
         plt.clf()
-        plt.figure(figsize=(8,12))
+        plt.figure(figsize=flow.spacing * flow.global_sz[0:2])
         plt.gca().set_aspect('equal')
         plt.gca().set_xlabel('x')
         plt.gca().set_ylabel('y')
@@ -2223,7 +2291,8 @@ def process_entrance():
         storey = storeys[storey_idx]
         flow_mi_ma = flow.get_slice(mi - 1, ma)
         
-        plt.gca().scatter(flow_mi_ma.T[0], flow_mi_ma.T[1], marker='s', s=1, norm=flow.norm, c=(flow_mi_ma.T[3] -1.) * flow.spacing, label='distance from exterior')    
+        plt.scatter(flow_mi_ma.T[0], flow_mi_ma.T[1], marker='s', s=1, c=(flow_mi_ma.T[3] -1.) * flow.spacing, label='distance from exterior')     # norm=flow.norm,
+        plt.colorbar()
         
         settings = ifcopenshell.geom.settings(
             USE_PYTHON_OPENCASCADE=False
@@ -2238,26 +2307,21 @@ def process_entrance():
         #     
         # if not elems:
         #     continue
-            
+                   
         flow_mi_ma = flow.get_slice(mi - 1, ma)
         
         if not flow_mi_ma.size:
             continue
         
-        for ob in objs:
-            if ob.M is None:
-                continue
-                
-            Z = ob.M[2,3] + 1.
-            if Z < mi or Z > ma:
-                # this shouldn't happen
-                continue
-                
+        for ob in objects_on_storey:
+
             ob.draw(plt.gca())
         
             try:
                 fdir = ob.outwards_direction()
             except ValueError as e:
+                import traceback
+                traceback.print_exc()
                 continue
                 
             plt.arrow(ob.center[0], ob.center[1], fdir[0] * 2., fdir[1] * 2., color='gray')
