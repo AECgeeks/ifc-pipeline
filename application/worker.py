@@ -962,7 +962,7 @@ mesh(result, "result.obj")
 """
 
 
-def process_safety_barriers(args, context):
+def process_safety_barriers(element_type, args, context):
     context.get_file('result.obj', target=os.path.join(context.path, 'result.obj'))
 
     subprocess.check_call([
@@ -976,7 +976,8 @@ def process_safety_barriers(args, context):
         sys.executable,
         os.path.abspath(os.path.join(os.path.dirname(__file__), 'annotate_safety_barriers.py')),
         context.id,
-        repr(context.files)
+        repr(context.files),
+        element_type
     ], cwd=context.path)
     
     # store json and gltfs
@@ -1219,9 +1220,14 @@ def escape_routes(id, config, **kwargs):
 
 
 def safety_barriers(id, config, **kwargs):
+    element = config.get('element', 'IfcStair')
+    
+    if element not in {'IfcStair', 'IfcRamp', 'all'}:
+        abort(400)
+
     process_voxel_check(
         make_script_safety_barriers,
-        process_safety_barriers,
+        functools.partial(process_safety_barriers, element),
         {},
         id,
         config['ids'],

@@ -11,7 +11,14 @@ import numpy
 
 from collections import defaultdict
 
-id, fns = sys.argv[1:]
+try:
+    id, fns = sys.argv[1:]
+    element_type = "IfcStair"
+except:
+    id, fns, element_type = sys.argv[1:]
+    if element_type == "all":
+        element_type = None
+    
 fns = ast.literal_eval(fns)
 files = [ifcopenshell.open(fn) for fn in fns]
 
@@ -65,7 +72,7 @@ for name, idxs in groups():
     for inst in insts:
         if inst.Decomposes:
             inst = inst.Decomposes[0].RelatingObject
-        if inst.is_a("IfcStair"):
+        if element_type is None or inst.is_a(element_type):
             name_mapping[inst].append(name)
 
 with open('colours.mtl', 'w') as f:
