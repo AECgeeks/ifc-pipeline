@@ -11,7 +11,7 @@ RUN /conda/bin/conda install -y python=3.8 numba numpy matplotlib scipy scikit-i
 RUN /conda/bin/conda install -y -c conda-forge pythonocc-core
 ENV PATH="/conda/bin:${PATH}"
 
-RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham scikit-learn minio
+RUN python3 -m pip install "Flask<2.0.0" flask-cors Pillow gunicorn rq redis "sqlalchemy<1.4.0" psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone flask-healthz sknw rdp bresenham scikit-learn minio aabbtree
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
 ## 3D output conversion: Move to voxel?

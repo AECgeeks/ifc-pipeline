@@ -2366,7 +2366,8 @@ def process_entrance():
             except:
                 continue
                 
-            valid = len(set(i.is_a() for i in tree.select(box)) - {'IfcOpeningElement', 'IfcSpace'}) == 0
+            intersections = [x for x in tree.select(box) if x.is_a() not in {'IfcOpeningElement', 'IfcSpace'}]
+            valid = len(intersections) == 0
             
             if not valid:
                 st = "ERROR"
@@ -2402,12 +2403,20 @@ def process_entrance():
             desc = {
                 "status": st,
                 "guid": ob.inst.GlobalId,
+                "intersections": [x.GlobalId for x in intersections],
                 "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, len(results)),
             }
             
             results.append(desc)
         
         plt.savefig("flow-%d.png" % (storey_idx), dpi=150)
+        
+    with open(id + ".json", "w") as f:
+        json.dump({
+            "id": id,
+            "results": results
+        }, f)
+
 
 if command == "doors":
     process_doors()
