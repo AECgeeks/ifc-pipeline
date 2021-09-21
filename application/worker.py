@@ -726,6 +726,7 @@ invalid = less_than(cnt, %d)
 
 mesh(valid, "valid.obj", groups=stair_ids_offset)
 mesh(invalid, "invalid.obj", groups=stair_ids_offset)
+describe_group_by("results.json", cnt, groups=stair_ids_offset, use_bits=0)
 """ % (entity, h + 1, h, h + 1)
 
     return basis
@@ -734,6 +735,8 @@ def process_3_26(entity, args, context):
     import ifcopenshell
     
     stair_guid_mapping = {}
+    
+    # note that this also includes the decomposed element id
     stair_to_children = defaultdict(list)
     
     for fn in context.files:
@@ -752,6 +755,11 @@ def process_3_26(entity, args, context):
     
     context.get_file('valid.obj', target=os.path.join(d, 'valid.obj'))
     context.get_file('invalid.obj', target=os.path.join(d, 'invalid.obj'))
+    components = context.get_json('results.json')
+    
+    min_height_component = {}
+    for di in components:
+        min_height_component[int(di["id"])] = float(int(di["min_value"])) * 0.05
     
     with open(os.path.join(d, 'colours.mtl'), 'w') as f:
         f.write("newmtl red\n")
@@ -782,11 +790,22 @@ def process_3_26(entity, args, context):
     subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--orient", "--", *simplify(), os.path.join(d, "%s.dae")])
     
     collected = []
+    min_height_by_guid = {}
     
     # join DAEs based on decomposition in IFC
     for iii, (gd, ch_ids) in enumerate(stair_to_children.items()):
+        # note ch_ids also includes decomposed element id
         fns = [os.path.join(d, "%d.dae" % cid) for cid in ch_ids]
         fns = list(filter(os.path.exists, fns))
+        
+        min_height = None
+        min_height_ids = set(min_height_component.keys()) & set(ch_ids)
+        if not min_height_ids:
+            print("WARNING: no min height recorded for", gd)
+        else:
+            min_height = min(map(min_height_component.__getitem__, min_height_ids))
+        min_height_by_guid[gd] = min_height
+        
         if len(fns) == 0:
             continue
         elif len(fns) == 1:
@@ -816,9 +835,9 @@ def process_3_26(entity, args, context):
         return {
             "visualization": "/run/%s/result/resource/gltf/%d.glb" % (context.id, i),
             "status": ["NOTICE", "ERROR"][is_error],
-            "guid": g
+            "guid": g,
+            "minHeight": min_height_by_guid[g] if is_error else None
         }
-    
         
     context.put_json(context.id + '.json', {
         'id': context.id,
