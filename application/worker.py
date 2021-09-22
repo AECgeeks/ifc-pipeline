@@ -1096,6 +1096,11 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
     except:
         traceback.print_exc(file=sys.stdout)
         set_progress(id, -2)
+        
+        
+def abort(id):
+    print("Invalid arguments")
+    set_progress(id, -2)
 
 
 def space_heights(id, config, **kwargs):
@@ -1108,7 +1113,7 @@ def space_heights(id, config, **kwargs):
     try:
         thresholds = list(map(float, thresholds))
     except:
-        abort(400)
+        return abort(id)
         
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
     d = utils.storage_dir_for_id(id, output=True)
@@ -1135,7 +1140,7 @@ def stair_headroom(id, config, **kwargs):
     try:
         height = float(height)
     except:
-        abort(400)
+        return abort(id)
         
     process_voxel_check(
         functools.partial(make_script_3_26, "IfcStair"),
@@ -1152,7 +1157,7 @@ def ramp_headroom(id, config, **kwargs):
     try:
         height = float(height)
     except:
-        abort(400)
+        return abort(id)
 
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
     d = utils.storage_dir_for_id(id, output=True)
@@ -1193,7 +1198,7 @@ def landings(id, config, **kwargs):
     try:
         length = float(length)
     except:
-        abort(400)
+        return abort(id)
 
 
     process_voxel_check(
@@ -1217,11 +1222,19 @@ def risers(id, config, **kwargs):
 
 def escape_routes(id, config, **kwargs):
     length = config.get('length', 20.)
+    evacuation_doors = config.get('evacuation_doors', None)
 
     try:
         length = float(length)
     except:
-        abort(400)
+        return abort(id)
+        
+    if evacuation_doors is not None:
+        if not isinstance(evacuation_doors, list):
+            return abort(id)
+        
+        if not all(isinstance(g, str) for g in evacuation_doors):
+            return abort(id)
         
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
     d = utils.storage_dir_for_id(id, output=True)
@@ -1232,7 +1245,7 @@ def escape_routes(id, config, **kwargs):
     process_voxel_check(
         make_script_connectivity_graph,
         functools.partial(process_connectivity_graph, "routes"),
-        {'length': length},
+        {'length': length, 'evacuation_doors': evacuation_doors},
         id,
         config['ids'],
         **kwargs)
@@ -1242,7 +1255,7 @@ def safety_barriers(id, config, **kwargs):
     element = config.get('element', 'IfcStair')
     
     if element not in {'IfcStair', 'IfcRamp', 'all'}:
-        abort(400)
+        return abort(id)
 
     process_voxel_check(
         make_script_safety_barriers,
@@ -1261,7 +1274,7 @@ def entrance_area(id, config, **kwargs):
         width = float(width)
         depth = float(depth)
     except:
-        abort(400)
+        return abort(id)
         
     process_voxel_check(
         make_script_connectivity_graph,
@@ -1280,7 +1293,7 @@ def ramp_percentage(id, config, **kwargs):
         warning = float(warning)
         error = float(error)
     except:
-        abort(400)
+        return abort(id)
     
     process_non_voxel_check(
         'ramp_percentage',

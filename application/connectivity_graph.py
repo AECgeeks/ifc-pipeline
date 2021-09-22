@@ -2001,6 +2001,13 @@ def process_landings():
 def process_routes():
 
     results = []
+    
+    evacuation_doors = config.get('evacuation_doors')
+    if evacuation_doors is None:
+        print("Using internal door selection")
+    else:
+        evacuation_doors = set(evacuation_doors)
+        print("Using %d supplied door guids" % len(evacuation_doors))
 
     G = create_connectivity_graph()
     
@@ -2086,7 +2093,13 @@ def process_routes():
             # if dobj.inst.GlobalId == "2OBrcmyk58NupXoVOHUuXp" and sp.GlobalId == "0BTBFw6f90Nfh9rP1dl_3A":
             #     import pdb; pdb.set_trace()
 
-            is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
+            if evacuation_doors is None:
+                is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
+            else:
+                is_fire_door = dobj.inst.GlobalId in evacuation_doors
+            
+            # External doors are never used as break points because they are already the end points
+            # of the graph traversal
             is_external = dobj.is_external
             
             if is_fire_door and not is_external:
