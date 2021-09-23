@@ -957,9 +957,17 @@ def make_script_safety_barriers(args):
 surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
 slabs = create_geometry(file, include={"IfcSlab"})
 doors = create_geometry(file, include={"IfcDoor"})
-surface_voxels = voxelize(surfaces)
+
+elevator_filter = filter_properties(file, nnn_Kategooria="Liftiruum")
+elevator_shaft = create_geometry(elevator_filter, include={"IfcSpace"}, optional=1)
+elevator_shaft_voxels = voxelize(elevator_shaft)
+
+surface_voxels_excl = voxelize(surfaces)
+surface_voxels = union(surface_voxels_excl, elevator_shaft_voxels)
+
 slab_voxels = voxelize(slabs)
 door_voxels = voxelize(doors)
+
 walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
 walkable_minus = subtract(walkable, slab_voxels)
 walkable_seed = intersect(door_voxels, walkable_minus)
