@@ -2083,29 +2083,31 @@ def process_routes():
     def break_at_doors(tup):
         sp, nodes, path, points, _ = tup
         
-        points = rdp(points, epsilon=flow.spacing/2.)
+        # we don't do rdp() here but rather rely on a point index step to create small visualization gaps
+        # and do the simplification when yielding the paths
+        # points = rdp(points, epsilon=flow.spacing/2.)
+        
         edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
         
         last_break = 0
-        previous_break_point = ()
         
-        for inst, dobj in zip(doors, objs):
-            # if dobj.inst.GlobalId == "2OBrcmyk58NupXoVOHUuXp" and sp.GlobalId == "0BTBFw6f90Nfh9rP1dl_3A":
-            #     import pdb; pdb.set_trace()
-
-            if evacuation_doors is None:
-                is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
-            else:
-                is_fire_door = dobj.inst.GlobalId in evacuation_doors
-            
-            # External doors are never used as break points because they are already the end points
-            # of the graph traversal
-            is_external = dobj.is_external
-            
-            if is_fire_door and not is_external:
-            
+        doors_used = set()
                 
-                for pidx, (p0, ed) in enumerate(zip(points, edges)):
+        for pidx, (p0, ed) in enumerate(zip(points, edges)):
+        
+            for inst, dobj in zip(doors, objs):
+                if dobj in doors_used: continue
+
+                if evacuation_doors is None:
+                    is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
+                else:
+                    is_fire_door = dobj.inst.GlobalId in evacuation_doors
+                
+                # External doors are never used as break points because they are already the end points
+                # of the graph traversal
+                is_external = dobj.is_external
+                
+                if is_fire_door and not is_external:
                 
                     # we discard zero-length edges, but also vertical edges
                     if all(ed[0:2] == 0.):
@@ -2127,29 +2129,20 @@ def process_routes():
                             if u > 1.: continue
                             if u < 0.: continue
                             
-                            if abs(u) < 0.01:
-                                
-                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 1],))
-                                last_break = pidx + 1
-                                previous_break_point = ()
-                                
-                            elif abs(1. - u) < 0.01:
+                            doors_used.add(dobj)
                             
-                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 2],))
-                                last_break = pidx + 2
-                                previous_break_point = ()
-                                
-                            else:
-                                
-                                pinter = p0 + ed * u
-                                
-                                yield numpy.concatenate(previous_break_point + (points[last_break:pidx + 1], [pinter]))
-                                last_break = pidx + 1
-                                previous_break_point = ([pinter],)
-                                
-        yield numpy.concatenate(previous_break_point + (points[last_break:],))
+                            # previously we had code here to precisely split the segments but by
+                            # deferring rdp() to after the segments have been broken up we know
+                            # that the edge length is minimal at this point in time.
+                            
+                            yield points[last_break:pidx + 1]
+                            last_break = pidx + 2                            
         
-    for N, rt in enumerate(yield_routes()):
+        yield points[last_break:]
+        
+    routes = yield_routes()
+    routes = [list(routes)[275]]
+    for N, rt in enumerate(routes):
         
         fn = "%s_%d.obj" % (id, N)
         obj_c = 1
@@ -2157,7 +2150,7 @@ def process_routes():
             
             print('mtllib mtl.mtl\n', file=obj)
             
-            segments = list(break_at_doors(rt))
+            segments = [rdp(seg) for seg in break_at_doors(rt)]
             segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
             lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
             
@@ -2181,7 +2174,7 @@ def process_routes():
                 li = []
                 upw = None   # tribool starts unknown ( not false, not true )      
 
-                for se in sedges[:-1]:
+                for se in sedges: # [:-1]:
                     if all(se == 0.):
                         continue
                         
