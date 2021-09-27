@@ -52,7 +52,7 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - sleep 20; python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi
+      - python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi
     environment:
   {% if not with_minio %}
       - MODEL_DIR=/data
@@ -127,7 +127,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    image: aecgeeks/ifc-pipeline:release-0.2.0
+    image: aecgeeks/ifc-pipeline:release-0.2.2
     entrypoint:
       - supervisord
       - -n
