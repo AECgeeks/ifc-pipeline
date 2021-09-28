@@ -2141,7 +2141,6 @@ def process_routes():
         yield points[last_break:]
         
     routes = yield_routes()
-    routes = [list(routes)[275]]
     for N, rt in enumerate(routes):
         
         fn = "%s_%d.obj" % (id, N)
