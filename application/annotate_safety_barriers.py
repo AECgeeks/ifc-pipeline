@@ -69,10 +69,8 @@ name_mapping = defaultdict(Counter)
 for name, idxs in groups():
     pts = verts[(numpy.array(sum(idxs, ()))-1)]
     for pt in pts:        
-        lower = pt - (0.2,0.2,0.2)
-        upper = pt + (0.2,0.2,0.2)
-        box = (tuple(map(float, lower)), tuple(map(float, upper)))
-        insts = tree.select_box(box)
+        pnt_t = tuple(map(float, pt))
+        insts = tree.select(pnt_t, extend=0.3)
         
         for inst in insts:
             if inst.Decomposes:
@@ -96,8 +94,12 @@ with open(ifn, 'r+') as f:
 name_mapping_2 = defaultdict(list)
 for i, (name, insts) in enumerate(name_mapping.items()):
     M = max(insts.values())
-    for inst in [i for i,c in insts.items() if c > M//2]:
+    for inst in [i for i,c in insts.items() if c > M // 4]:
         name_mapping_2[inst].append(name)
+        
+import pprint
+pprint.pprint(name_mapping)
+pprint.pprint(name_mapping_2)
 
 # --orient causes issues?
 subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--split", "--orient", "--components", "--", "simplified.obj", os.path.abspath("%s.dae")])

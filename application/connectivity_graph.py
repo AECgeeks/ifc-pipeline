@@ -2190,7 +2190,7 @@ def process_routes():
             print('mtllib mtl.mtl\n', file=obj)
             
             segs = list(break_at_doors(rt))
-            segments = [rdp(seg * (1., 1., 5.), epsilon=flow.spacing * 3) / (1., 1., 5.) for lidx, seg in segs]
+            segments = [rdp(seg * (1., 1., 10.), epsilon=flow.spacing * 3) / (1., 1., 10.) for lidx, seg in segs]
             segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
             lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
             length_indices = [int(lidx > 0) for lidx, seg in segs]
