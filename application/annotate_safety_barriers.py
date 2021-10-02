@@ -2,6 +2,7 @@ import os
 import sys
 import ast
 import json
+import functools
 import subprocess
 
 import ifcopenshell
@@ -9,7 +10,7 @@ import ifcopenshell.geom
 
 import numpy
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 try:
     id, fns = sys.argv[1:]
@@ -28,8 +29,12 @@ s = ifcopenshell.geom.settings(
 )
 
 tree = ifcopenshell.geom.tree()
-for f in files:
-    tree.add_file(f, s)
+include = {}
+if element_type:
+    include["include"] = [element_type]
+iterators = list(map(functools.partial(ifcopenshell.geom.iterator, s, **include), files))
+for it in iterators:
+    tree.add_iterator(it)
 
 ifn = "simplified.obj"
 
@@ -58,23 +63,23 @@ def groups():
         yield name, current
         current[:] = []
         
-name_mapping = defaultdict(list)
+# obj name -> ifc insts
+name_mapping = defaultdict(Counter)
 
 for name, idxs in groups():
     pts = verts[(numpy.array(sum(idxs, ()))-1)]
-    center = (pts.min(axis=0) + pts.max(axis=0)) / 2.
-    
-    lower = center - (0.2,0.2,0.2)
-    upper = center + (0.2,0.2,0.2)
-    box = (tuple(map(float, lower)), tuple(map(float, upper)))
-    insts = tree.select_box(box)
-    
-    for inst in insts:
-        if inst.Decomposes:
-            inst = inst.Decomposes[0].RelatingObject
-        if element_type is None or inst.is_a(element_type):
-            name_mapping[inst].append(name)
-
+    for pt in pts:        
+        lower = pt - (0.2,0.2,0.2)
+        upper = pt + (0.2,0.2,0.2)
+        box = (tuple(map(float, lower)), tuple(map(float, upper)))
+        insts = tree.select_box(box)
+        
+        for inst in insts:
+            if inst.Decomposes:
+                inst = inst.Decomposes[0].RelatingObject
+            if element_type is None or inst.is_a(element_type):
+                name_mapping[name].update([inst])
+                
 with open('colours.mtl', 'w') as f:
     f.write("newmtl red\n")
     f.write("Kd 1.0 0.0 0.0\n\n")
@@ -86,11 +91,20 @@ with open(ifn, 'r+') as f:
     f.seek(0)
     f.writelines(ls)
 
+# we can have multiple obj names corresponding to the same ifc element, so regroup
+# ifc inst -> obj names
+name_mapping_2 = defaultdict(list)
+for i, (name, insts) in enumerate(name_mapping.items()):
+    M = max(insts.values())
+    for inst in [i for i,c in insts.items() if c > M//2]:
+        name_mapping_2[inst].append(name)
+
 # --orient causes issues?
 subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--split", "--orient", "--components", "--", "simplified.obj", os.path.abspath("%s.dae")])
 
 results = []
-for i, (inst, names) in enumerate(name_mapping.items()):
+for i, (inst, names) in enumerate(name_mapping_2.items()):
+            
     subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--", *(os.path.abspath(n + ".dae") for n in names), os.path.abspath("%d.dae" % i)])
     subprocess.check_call(["COLLADA2GLTF-bin", "-i", "%d.dae" % i, "-o", "%s_%d.glb" % (id, i), "-b", "1"])
     
@@ -99,7 +113,7 @@ for i, (inst, names) in enumerate(name_mapping.items()):
         "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, i),
         "guid": inst.GlobalId
     })
-        
+    
 with open(id + ".json", "w") as out:
     json.dump({
         "id": id,
