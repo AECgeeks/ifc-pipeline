@@ -2204,7 +2204,7 @@ def process_routes():
             desc = {
                 "status": st,
                 "maxLength": max_length,
-                "allowSegmentLengths": allowed_lens,
+                "allowedSegmentLengths": allowed_lens,
                 "segmentLength": lens,
                 "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
                 "guid": rt[0].GlobalId
