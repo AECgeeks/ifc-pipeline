@@ -22,6 +22,10 @@
 #                                                                                #
 ##################################################################################
 
+import os
+import time
+
+import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -30,7 +34,6 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.orm import relationship
-import os
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
 
@@ -65,8 +68,6 @@ class model(Base, Serializable):
         self.filename = filename
 
 
-
-
 class file(Base, Serializable):
     __tablename__ = 'files'
 
@@ -87,9 +88,17 @@ class file(Base, Serializable):
 
 
 def initialize():
-    if not database_exists(engine.url):
-        create_database(engine.url)
-    Base.metadata.create_all(engine)
+    for i in range(200):
+        try:
+            if not database_exists(engine.url):
+                create_database(engine.url)
+            Base.metadata.create_all(engine)
+            print("db ready")
+            break
+        except sqlalchemy.exc.OperationalError as e:
+            print("waiting for db")
+            time.sleep(3)
+            continue
 
 
 if __name__ == "__main__" or DEVELOPMENT:
