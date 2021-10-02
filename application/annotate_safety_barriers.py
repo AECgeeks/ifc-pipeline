@@ -36,7 +36,7 @@ iterators = list(map(functools.partial(ifcopenshell.geom.iterator, s, **include)
 for it in iterators:
     tree.add_iterator(it)
 
-ifn = "simplified.obj"
+ifn = "result.obj"
 
 def vertices():
     with open(ifn) as f:
@@ -58,6 +58,7 @@ def groups():
                 name = l[2:].strip()
             elif l.startswith("f "):
                 vidx = l.split(" ")[1:]
+                vidx = [x.split("/")[0] for x in vidx]
                 current.append(tuple(map(int, vidx)))
     if current:
         yield name, current
@@ -98,6 +99,10 @@ for i, (name, insts) in enumerate(name_mapping.items()):
     M = max(insts.values())
     for inst in [i for i,c in insts.items() if c > M//2]:
         name_mapping_2[inst].append(name)
+
+# @nb we have generated associations using result.obj for dense points
+# we actually use simplified.obj now for the visualization. The group
+# names are identical in both files.
 
 # --orient causes issues?
 subprocess.check_call(["blender", "-b", "-P", os.path.join(os.path.dirname(__file__), "convert.py"), "--split", "--orient", "--components", "--", "simplified.obj", os.path.abspath("%s.dae")])
