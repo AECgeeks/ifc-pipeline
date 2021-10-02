@@ -1229,19 +1229,14 @@ def risers(id, config, **kwargs):
 
 
 def escape_routes(id, config, **kwargs):
-    length = config.get('length', 20.)
-    evacuation_doors = config.get('evacuation_doors', None)
-
-    try:
-        length = float(length)
-    except:
+    lengths = config.get('lengths', [30., 30.])
+    objects = config.get('objects', None)
+    
+    if not isinstance(lengths, list) or len(lengths) != 2 or set(map(type, lengths)) != {float}:
         return abort(id)
         
-    if evacuation_doors is not None:
-        if not isinstance(evacuation_doors, list):
-            return abort(id)
-        
-        if not all(isinstance(g, str) for g in evacuation_doors):
+    if objects is not None:
+        if not isinstance(objects, list):
             return abort(id)
         
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
@@ -1253,7 +1248,7 @@ def escape_routes(id, config, **kwargs):
     process_voxel_check(
         make_script_connectivity_graph,
         functools.partial(process_connectivity_graph, "routes"),
-        {'length': length, 'evacuation_doors': evacuation_doors},
+        {'lengths': lengths, 'objects': objects},
         id,
         config['ids'],
         **kwargs)
