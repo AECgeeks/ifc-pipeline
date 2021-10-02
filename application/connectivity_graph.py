@@ -119,7 +119,10 @@ def wrap_try(fn):
 id, fns, command, config = sys.argv[1:]
 
 fns = ast.literal_eval(fns)
-config = ast.literal_eval(config)
+try:
+    config = ast.literal_eval(config)
+except:
+    config = json.load(open(config))
 
 LENGTH = config.get('length', 0.5)
 
@@ -2002,11 +2005,24 @@ def process_routes():
 
     results = []
     
-    evacuation_doors = config.get('evacuation_doors')
+    evacuation_doors = config.get('objects')
     if evacuation_doors is None:
         print("Using internal door selection")
+        advance_length_doors = set()
+        exit_route_doors = None
+        LENGTHS = [LENGTH, LENGTH]
     else:
-        evacuation_doors = set(evacuation_doors)
+        def counts_as_evac_door(d):
+            if set(map(operator.itemgetter("type"), d["zones"])) == {"evacuationZone", "exitZone"}:
+                return True
+            if set(map(operator.itemgetter("type"), d["zones"])) == {"evacuationZone"} and d["evacDoor"]:
+                return True
+            return False
+            
+        advance_length_doors = [o["guid"] for o in evacuation_doors if o["evacDoor"]]
+        exit_route_doors = [o["guid"] for o in evacuation_doors if o["firesafetyExit"]]
+        evacuation_doors = [o["guid"] for o in evacuation_doors if counts_as_evac_door(o)]
+        LENGTHS = config['lengths']
         print("Using %d supplied door guids" % len(evacuation_doors))
 
     G = create_connectivity_graph()
@@ -2031,7 +2047,7 @@ def process_routes():
     objs = list(map(ifc_element, doors, shapes))
                    
     for inst, dobj in zip(doors, objs):
-        if dobj.is_external:
+        if dobj.is_external and (exit_route_doors is None or dobj.inst.GlobalId in exit_route_doors):
             array_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
             node_idx = list(G.nodes)[array_idx]
             exterior_nodes.append(node_idx)
@@ -2078,7 +2094,21 @@ def process_routes():
             
             if longest_path is not None and longest_path_edges is not None:
                 yield sp, space_nodes, None, longest_path, longest_path_edges
-
+                
+    def aabb_from_points(pts):
+        return AABB(list(zip(pts.min(axis=0), pts.max(axis=0))))
+                
+    def door_to_aabb(door):
+        pts = numpy.array([
+            dobj.center[0:2] - dobj.M.T[0][0:2] * dobj.width / 2., 
+            dobj.center[0:2] + dobj.M.T[0][0:2] * dobj.width / 2.
+        ])
+        pts = numpy.concatenate((pts, [[dobj.center[2]], [dobj.center[2] + dobj.height]]), axis=1)
+        return aabb_from_points(pts)
+                
+    door_tree = AABBTree()
+    for didx, dobj in enumerate(objs):
+        door_tree.add(door_to_aabb(dobj), didx)
 
     def break_at_doors(tup):
         sp, nodes, path, points, _ = tup
@@ -2092,16 +2122,23 @@ def process_routes():
         last_break = 0
         
         doors_used = set()
+        
+        length_index = 0
                 
         for pidx, (p0, ed) in enumerate(zip(points, edges)):
         
-            for inst, dobj in zip(doors, objs):
+            for didx in door_tree.overlap_values(aabb_from_points(numpy.array([p0, p0+ed]))):
+            
+                dobj = objs[didx]
+            
                 if dobj in doors_used: continue
 
                 if evacuation_doors is None:
                     is_fire_door = dobj.height is not None and dobj.width is not None and dobj.width > 1.5
                 else:
                     is_fire_door = dobj.inst.GlobalId in evacuation_doors
+                    
+                advance_length = dobj.inst.GlobalId in advance_length_doors
                 
                 # External doors are never used as break points because they are already the end points
                 # of the graph traversal
@@ -2135,13 +2172,15 @@ def process_routes():
                             # deferring rdp() to after the segments have been broken up we know
                             # that the edge length is minimal at this point in time.
                             
-                            yield points[last_break:pidx + 1]
-                            last_break = pidx + 2                            
+                            yield length_index, points[last_break:pidx + 1]
+                            last_break = pidx + 2
+                            
+                            if advance_length:
+                                length_index += 1
         
-        yield points[last_break:]
+        yield length_index, points[last_break:]
         
     routes = yield_routes()
-    routes = [list(routes)[275]]
     for N, rt in enumerate(routes):
         
         fn = "%s_%d.obj" % (id, N)
@@ -2150,26 +2189,31 @@ def process_routes():
             
             print('mtllib mtl.mtl\n', file=obj)
             
-            segments = [rdp(seg) for seg in break_at_doors(rt)]
+            segs = list(break_at_doors(rt))
+            segments = [rdp(seg * (1., 1., 5.), epsilon=flow.spacing * 3) / (1., 1., 5.) for lidx, seg in segs]
             segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
             lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
+            length_indices = [int(lidx > 0) for lidx, seg in segs]
             
             max_length = max(lens)
-            is_error = lambda l: l > LENGTH
+            allowed_lens = [LENGTHS[lidx] for lidx in length_indices]
+            is_error = any(a > b for a, b in zip(lens, allowed_lens))
             
-            st = 'ERROR' if is_error(max_length) else 'NOTICE'
+            st = 'ERROR' if is_error else 'NOTICE'
                     
             desc = {
                 "status": st,
                 "maxLength": max_length,
+                "allowSegmentLengths": allowed_lens,
+                "segmentLength": lens,
                 "visualization": "/run/%s/result/resource/gltf/%d.glb" % (id, N),
                 "guid": rt[0].GlobalId
             }            
             results.append(desc)
             
-            for spoints, sedges, slen in zip(segments, segment_edges, lens):
+            for spoints, sedges, slen, alen in zip(segments, segment_edges, lens, allowed_lens):
             
-                clr = 'red' if is_error(slen) else 'green'
+                clr = 'red' if slen > alen else 'green'
                 
                 li = []
                 upw = None   # tribool starts unknown ( not false, not true )      
