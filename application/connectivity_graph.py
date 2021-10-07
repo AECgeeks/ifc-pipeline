@@ -2108,7 +2108,8 @@ def process_routes():
                 
     door_tree = AABBTree()
     for didx, dobj in enumerate(objs):
-        door_tree.add(door_to_aabb(dobj), didx)
+        if dobj.geom is not None:
+            door_tree.add(door_to_aabb(dobj), didx)
 
     def break_at_doors(tup):
         sp, nodes, path, points, _ = tup
