@@ -67,17 +67,40 @@ def groups():
 # obj name -> ifc insts
 name_mapping = defaultdict(Counter)
 
+import random
+import time
+
 for name, idxs in groups():
-    pts = verts[(numpy.array(sum(idxs, ()))-1)]
-    for pt in pts:        
+    t0 = time.perf_counter()
+    # take set as multiple triangles use same position
+    pts = verts[(numpy.array(list(set(sum(idxs, ()))))-1)]
+    # select only z=0.1+ or z=0.05+ as we have bottom and
+    # top faces for each vertex
+    # a bit clumsy due to sign differences of fmod
+    # @todo can we move them to the middle?
+    select = numpy.abs(numpy.abs(numpy.fmod(pts[:,2], 0.1)) - 0.05) < 1.e-5
+    pts = pts[select]
+    
+    # take random subset of 100 pts
+    pts = list(pts)
+    random.shuffle(pts)
+    pts = pts[0:100]
+    
+    for pt in pts:
         pnt_t = tuple(map(float, pt))
-        insts = tree.select(pnt_t, extend=0.3)
+    
+        for radius in (0.1, 0.2, 0.3):
+            insts = tree.select(pnt_t, extend=radius)
+            if insts: break
         
         for inst in insts:
             if inst.Decomposes:
                 inst = inst.Decomposes[0].RelatingObject
             if element_type is None or inst.is_a(element_type):
                 name_mapping[name].update([inst])
+    
+    t1 = time.perf_counter()
+    print("%.5f" % (t1 - t0), name, len(pts))
                 
 with open('colours.mtl', 'w') as f:
     f.write("newmtl red\n")
