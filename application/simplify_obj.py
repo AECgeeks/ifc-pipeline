@@ -144,9 +144,23 @@ for gn, g in groups():
                 nb = zzz[i] - visited_faceidxs
                 for n in nb:
                     visit_faceidx(n)
+                    
+            def visit_faceidx(j):
+                queue = [j]
+                while queue:
+                    i = queue[0]
+                    queue = queue[1:]
+                    
+                    if i in visited_faceidxs: continue
+                    
+                    print(i, len(queue), len(visited_faceidxs))
+                    
+                    visited_faceidxs.add(i)
+                    nb = zzz[i] - visited_faceidxs
+                    queue.extend(nb)
 
             faces_list = []
-
+            
             while face_idxs:
                 visit_faceidx(next(iter(face_idxs)))
                 arr = numpy.array(list(visited_faceidxs))
