@@ -20,7 +20,7 @@ import numpy
 import skimage
 from numpy.ma import masked_array
 
-WITH_PLOT = True
+WITH_PLOT = False
 if WITH_PLOT:
     import matplotlib
     from matplotlib import pyplot as plt
