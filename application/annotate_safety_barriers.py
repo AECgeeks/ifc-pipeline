@@ -31,7 +31,23 @@ s = ifcopenshell.geom.settings(
 tree = ifcopenshell.geom.tree()
 include = {}
 if element_type:
-    include["include"] = [element_type]
+
+    def get_decompositions(x):
+        """
+        Generator that recursively yields decomposing elements
+        """
+        for rel in x.IsDecomposedBy:
+            obs = rel.RelatedObjects
+            yield from obs
+            for ob in obs:
+                yield from get_decompositions(ob)
+
+    insts = sum((f.by_type(element_type) for f in files), [])
+    for inst in list(insts):
+        insts.extend(get_decompositions(inst))
+
+    include["include"] = insts
+
 iterators = list(map(functools.partial(ifcopenshell.geom.iterator, s, **include), files))
 for it in iterators:
     tree.add_iterator(it)
@@ -106,7 +122,7 @@ with open('colours.mtl', 'w') as f:
     f.write("newmtl red\n")
     f.write("Kd 1.0 0.0 0.0\n\n")
 
-with open(ifn, 'r+') as f:
+with open("simplified.obj", 'r+') as f:
     ls = f.readlines()
     ls.insert(0, "mtllib colours.mtl\n")
     ls.insert(1, "usemtl red\n")
