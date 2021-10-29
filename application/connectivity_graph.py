@@ -2006,10 +2006,16 @@ def process_routes():
     results = []
     
     evacuation_doors = config.get('objects')
+    
+    evac_zone_guids = set()
+    evac_zone_space_guids = set()
+    space_to_zone_type = {}
+    
     if evacuation_doors is None:
         print("Using internal door selection")
         advance_length_doors = set()
         exit_route_doors = None
+        evac_zone_doors = set()
         LENGTHS = [LENGTH, LENGTH]
     else:
         def counts_as_evac_door(d):
@@ -2019,12 +2025,26 @@ def process_routes():
                 return True
             return False
             
+        for o in evacuation_doors:
+            for z in o["zones"]:
+                if z["type"] == "evacuationZone":
+                    evac_zone_guids.add(z["guid"])
+            
+        evac_zone_doors = [o["guid"] for o in evacuation_doors if "evacuationZone" in set(map(operator.itemgetter("type"), o["zones"]))]
         advance_length_doors = [o["guid"] for o in evacuation_doors if o["evacDoor"]]
         exit_route_doors = [o["guid"] for o in evacuation_doors if o["firesafetyExit"]]
         evacuation_doors = [o["guid"] for o in evacuation_doors if counts_as_evac_door(o)]
         LENGTHS = config['lengths']
         print("Using %d supplied door guids" % len(evacuation_doors))
-
+        
+    for f in fs:
+        for zn in f.by_type("IfcZone"):
+            if zn.IsGroupedBy:
+                for sp in zn.IsGroupedBy[0].RelatedObjects:
+                    if zn.GlobalId in evac_zone_guids:
+                        evac_zone_space_guids.add(sp.GlobalId)
+                    space_to_zone_type[sp.GlobalId] = "evacuationZone" if zn.GlobalId in evac_zone_guids else "exitZone"
+                    
     G = create_connectivity_graph()
     
     if WITH_MAYAVI:
@@ -2036,11 +2056,13 @@ def process_routes():
     nodes_by_space = defaultdict(list)
     exterior_nodes = []
     xyzs = numpy.array(list(map(G.get_node_xyz, G.nodes)))
+    node_to_zone_type = {}
     
     for n, xyz in zip(G.nodes, xyzs):
         for inst in tree.select(tuple(map(float, xyz))):
             if inst.is_a("IfcSpace"):
                 nodes_by_space[inst].append(n)
+                node_to_zone_type[n] = space_to_zone_type.get(inst.GlobalId)
                 
     doors = sum(map(lambda f: f.by_type("IfcDoor"), fs), [])
     shapes = list(map(create_shape, doors))
@@ -2051,7 +2073,6 @@ def process_routes():
             array_idx = numpy.argmin(numpy.linalg.norm(xyzs - dobj.center[0:3], axis=1))
             node_idx = list(G.nodes)[array_idx]
             exterior_nodes.append(node_idx)
-            
     
     def yield_routes():
         for sp, space_nodes in nodes_by_space.items():
@@ -2069,24 +2090,50 @@ def process_routes():
                 shortest_path_space_edges = None
                 
                 for nb in exterior_nodes:
-                    try:
-                        asp = [nx.shortest_path(G.G, na, nb)]
-                    except: continue
-                    
-                    for path in asp:
-                    
-                        if len(path_to_edges(path)) == 0:
+                
+                    graph_in_use = G.G
+                
+                    while True:
+                
+                        try:
+                            path = nx.shortest_path(graph_in_use, na, nb)
+                        except:
+                            path = None
+                            break
+                        
+                        zone_types = [node_to_zone_type.get(n) for n in path]
+                        
+                        has_seen_evac_zone = False
+                        
+                        # keep removing vertices until we arrive at a path
+                        # that does not transition from evac to exit
+                        valid = True
+                        for n, zt in zip(path, zone_types):
+                            if zt == "exitZone" and has_seen_evac_zone:
+                                graph_in_use = graph_in_use.copy()
+                                graph_in_use.remove_node(n)
+                                valid = False
+                                break
+                            if zt == "evacuationZone":
+                                has_seen_evac_zone = True
+                                
+                        if not valid:
                             continue
                         
-                        points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
-                        edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
-                        plen = numpy.sum(numpy.linalg.norm(edges, axis=1))
+                        break
                         
-                        if plen < min_len_space:
-                            min_len_space = plen
-                            shortest_path_space = points
-                            shortest_path_space_edges = edges
-                        
+                    if path is None or len(path_to_edges(path)) == 0:
+                        continue
+                    
+                    points = numpy.concatenate(list(map(G.get_edge_points, path_to_edges(path))))
+                    edges = (numpy.roll(points, shift=-1, axis=0) - points)[:-1]
+                    plen = numpy.sum(numpy.linalg.norm(edges, axis=1))
+                    
+                    if plen < min_len_space:
+                        min_len_space = plen
+                        shortest_path_space = points
+                        shortest_path_space_edges = edges
+                    
                 if min_len_space > max_len:
                     max_len = min_len_space
                     longest_path = shortest_path_space
@@ -2125,7 +2172,9 @@ def process_routes():
         doors_used = set()
         
         length_index = 0
-                
+        
+        in_evac_zone = sp.GlobalId in evac_zone_space_guids
+        
         for pidx, (p0, ed) in enumerate(zip(points, edges)):
         
             for didx in door_tree.overlap_values(aabb_from_points(numpy.array([p0, p0+ed]))):
@@ -2173,13 +2222,16 @@ def process_routes():
                             # deferring rdp() to after the segments have been broken up we know
                             # that the edge length is minimal at this point in time.
                             
-                            yield length_index, points[last_break:pidx + 1]
+                            yield length_index, in_evac_zone, points[last_break:pidx + 1]
                             last_break = pidx + 2
                             
                             if advance_length:
                                 length_index += 1
+                                
+                            if dobj.inst.GlobalId in evac_zone_doors:
+                                in_evac_zone = True
         
-        yield length_index, points[last_break:]
+        yield length_index, in_evac_zone, points[last_break:]
         
     routes = yield_routes()
     for N, rt in enumerate(routes):
@@ -2191,14 +2243,14 @@ def process_routes():
             print('mtllib mtl.mtl\n', file=obj)
             
             segs = list(break_at_doors(rt))
-            segments = [rdp(seg * (1., 1., 10.), epsilon=flow.spacing * 3) / (1., 1., 10.) for lidx, seg in segs]
+            segments = [rdp(seg * (1., 1., 10.), epsilon=flow.spacing * 3) / (1., 1., 10.) for lidx, in_ez, seg in segs]
             segment_edges = [(numpy.roll(ps, shift=-1, axis=0) - ps)[:-1] for ps in segments]
             lens = [sum(map(numpy.linalg.norm, e)) for e in segment_edges]
-            length_indices = [int(lidx > 0) for lidx, seg in segs]
+            length_indices = [None if in_ez else int(lidx > 0) for lidx, in_ez, seg in segs]
             
             max_length = max(lens)
-            allowed_lens = [LENGTHS[lidx] for lidx in length_indices]
-            is_error = any(a > b for a, b in zip(lens, allowed_lens))
+            allowed_lens = [None if lidx is None else LENGTHS[lidx] for lidx in length_indices]
+            is_error = any(False if b is None else a > b for a, b in zip(lens, allowed_lens))
             
             st = 'ERROR' if is_error else 'NOTICE'
                     
@@ -2214,7 +2266,7 @@ def process_routes():
             
             for spoints, sedges, slen, alen in zip(segments, segment_edges, lens, allowed_lens):
             
-                clr = 'red' if slen > alen else 'green'
+                clr = 'red' if alen is not None and slen > alen else 'green'
                 
                 li = []
                 upw = None   # tribool starts unknown ( not false, not true )      
