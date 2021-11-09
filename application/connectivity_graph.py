@@ -938,7 +938,7 @@ def process_risers():
 
         ifc_elem = c.most_common(1)[0][0] if len(c) else None
         
-        st = "NOTICE" if ifc_elem and ifc_elem.is_a("IfcStair") or ifc_elem.is_a("IfcStairFlight") else "ERROR"
+        st = "NOTICE" if ifc_elem and (ifc_elem.is_a("IfcStair") or ifc_elem.is_a("IfcStairFlight")) else "ERROR"
         obj.use_material("red" if st == "ERROR" else "green")
         
         for n in nds:
