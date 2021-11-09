@@ -913,8 +913,16 @@ def process_risers():
     
     for i,r in enumerate(riser_list):
         for j in riser_tree.overlap_values(r.aabb):
-            if numpy.arccos(riser_list[i].norm @ riser_list[j].norm) > numpy.pi / 4:
+            ri, rj = riser_list[i], riser_list[j]
+            rod = abs((ri.norm @ ri.xy) - (ri.norm @ rj.xy))
+            if numpy.arccos(numpy.clip(ri.norm @ rj.norm, -1., 1.)) > numpy.pi / 4:
                 # incorporate an angle check to get consistent values due to rotated risers            
+                continue
+            if not (min(ri.heights) == max(rj.heights) or max(ri.heights) == min(rj.heights)):
+                # risers should be connected in heights head-to-tail
+                continue
+            if (rod * flow.spacing) < 0.10:
+                # risers should be some distance apart
                 continue
             riser_graph.add_edge(i, j)
     
