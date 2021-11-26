@@ -106,7 +106,7 @@ services:
     
   voxel:
     build: voxel_server
-    image: aecgeeks/voxel-server:release-0.3.0
+    image: aecgeeks/voxel-server:release-0.3.1
     expose:
       - "5000"    
   
