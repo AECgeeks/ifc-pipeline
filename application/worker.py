@@ -847,8 +847,8 @@ def process_3_26(entity, args, context):
     utils.store_file(context.id, "json")
 
 
-def make_script_connectivity_graph(args):
-    return """file = parse("*.ifc")
+def make_script_connectivity_graph(exclude_external, args):
+    base = """file = parse("*.ifc")
 surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
 slabs = create_geometry(file, include={"IfcSlab"})
 doors = create_geometry(file, include={"IfcDoor"})
@@ -886,22 +886,32 @@ reachable_bottom = subtract(reachable, reachable_shifted)
 seed = intersect(reachable, external_door_voxels)
 flow = traverse(reachable, seed, connectedness=26, type="uint")
 flow_bottom = intersect(flow, reachable_bottom)
-export_csv(flow_bottom, "flow.csv")
 """
 
-"""
-external = exterior(voxels)
-walkable_region_offset = offset_xy(walkable_region, 1)
-walkable_region_incl = union(walkable_region, walkable_region_offset)
-seed = intersect(walkable_region_incl, external)
+    epilogue_1 = """export_csv(flow_bottom, "flow.csv")
 """
 
+    epilogue_2 = """low_res = resample(voxels, -4)
+external = exterior(low_res)
+flow_bit = copy(flow_bottom, type="bit")
+flow_low_res = resample(flow_bit, -4)
+
+external_offset = offset(external)
+external_larger = union(external, external_offset)
+
+internal = invert(external_larger)
+cull_away_low_res = subtract(flow_low_res, internal)
+cull_away_hi_res = resample(cull_away_low_res, 4)
+
+flow_bottom_internal = subtract(flow_bottom, cull_away_hi_res)
+
+export_csv(flow_bottom_internal, "flow.csv")
+mesh(cull_away_hi_res, "cull_away_hi_res.obj")
 """
-door_mask = traverse(empty, door_voxels, depth=1.1, connectedness=26)
-flow_masked = intersect(flow, door_mask)
-export_csv(flow_masked, "flow.csv")
-mesh(flow_masked, "flow.obj")
-"""
+
+    print(exclude_external, exclude_external == "exclude_external")
+    
+    return base + (epilogue_2 if exclude_external == "exclude_external" else epilogue_1)
 
 def process_connectivity_graph(command, args, context):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
@@ -1192,7 +1202,7 @@ def door_direction(id, config, **kwargs):
         return empty_result(d, id)
 
     process_voxel_check(
-        make_script_connectivity_graph,
+        functools.partial(make_script_connectivity_graph, "exclude_external"),
         functools.partial(process_connectivity_graph, "doors"),
         {},
         id,
@@ -1210,7 +1220,7 @@ def landings(id, config, **kwargs):
 
 
     process_voxel_check(
-        make_script_connectivity_graph,
+        functools.partial(make_script_connectivity_graph, "include_external"),
         functools.partial(process_connectivity_graph, "landings"),
         {'length': length * 0.5},
         id,
@@ -1220,7 +1230,7 @@ def landings(id, config, **kwargs):
 
 def risers(id, config, **kwargs):
     process_voxel_check(
-        make_script_connectivity_graph,
+        functools.partial(make_script_connectivity_graph, "include_external"),
         functools.partial(process_connectivity_graph, "risers"),
         {},
         id,
@@ -1246,7 +1256,7 @@ def escape_routes(id, config, **kwargs):
         return empty_result(d, id)
 
     process_voxel_check(
-        make_script_connectivity_graph,
+        functools.partial(make_script_connectivity_graph, "include_external"),
         functools.partial(process_connectivity_graph, "routes"),
         {'lengths': lengths, 'objects': objects},
         id,
@@ -1280,7 +1290,7 @@ def entrance_area(id, config, **kwargs):
         return abort(id)
         
     process_voxel_check(
-        make_script_connectivity_graph,
+        functools.partial(make_script_connectivity_graph, "exclude_external"),
         functools.partial(process_connectivity_graph, "entrance"),
         {width: width, depth:depth},
         id,

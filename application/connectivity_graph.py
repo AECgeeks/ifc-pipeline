@@ -203,7 +203,11 @@ class ifc_element:
         # which is symmetric for small distances. The only true solution is to do
         # another traversal from the max value (masked by interior volume) to get
         # a monotonic function around the external doors (in the opposite direction).
-        self.read_distance = 8 if self.is_external else 0.2
+        # self.read_distance = 8 if self.is_external else 0.2
+        
+        # This is now addressed by subtracting external flow field for the checks
+        # that depend on door direction.
+        self.read_distance = 0.5
         
         self.pts = numpy.array([
             self.center - self.Mi[1] * self.read_distance,
@@ -308,7 +312,7 @@ class ifc_element:
             
     def outwards_direction(self):
         def read(p):
-            return flow.lookup(p[0:3], max_dist=0.6 if self.read_distance < 1. else self.read_distance)
+            return flow.lookup(p[0:3], max_dist=1.0)
             # d, i = tree.query(p[0:3])
             # if d > 0.4:
             #     raise ValueError("%f > 0.4" % d)
@@ -327,7 +331,7 @@ class ifc_element:
             return
             
         def read(p):
-            return flow.lookup(p[0:3], max_dist=0.4 if self.read_distance < 1. else self.read_distance)
+            return flow.lookup(p[0:3], max_dist=1.0)
             # d, i = tree.query(p[0:3])
             # if d > 0.4:
             #     raise ValueError("%f > 0.4" % d)
@@ -365,7 +369,7 @@ elev_pairs = list(zip(elevations_2, elevations_2[1:] + [inf]))
 
 tree_settings = ifcopenshell.geom.settings(
     DISABLE_TRIANGULATION=True,
-    DISABLE_OPENING_SUBTRACTIONS=True
+    DISABLE_OPENING_SUBTRACTIONS=(False if command == "entrance" else True)
 )
 tree = ifcopenshell.geom.tree()
 # @todo speed up
