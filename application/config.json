@@ -1,0 +1,11 @@
+{
+    "tasks": [
+        "ifc_validation_task",
+        "xml_generation_task",
+        "geometry_generation_task",
+        "glb_optimize_task",
+        "gzip_task",
+        "svg_rename_task",
+        "svg_generation_task"
+    ]
+}

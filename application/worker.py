@@ -35,6 +35,10 @@ import operator
 import shutil
 
 import requests
+import jsonschema
+
+import utils
+import database
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
@@ -43,10 +47,15 @@ IFCCONVERT = os.path.join(exe_path, "IfcConvert") + ext
 if not os.path.exists(IFCCONVERT):
     IFCCONVERT = "IfcConvert"
 
+# parse configuration file
+config = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 
-import utils
-import database
+# parse configuration schema and validate config
+schema = json.load(open(os.path.join(os.path.dirname(__file__), "config.schema")))
+jsonschema.validate(schema=schema, instance=config)
 
+# returns true if task is enabled in config
+task_enabled = lambda nm: nm.__name__ in config['tasks']
 
 def set_progress(id, progress):
     session = database.Session()
@@ -213,6 +222,8 @@ def do_process(id):
             tasks_on_aggregate.append(mdl.task)
         else:
             tasks.append(mdl.task)
+            
+    tasks = list(filter(task_enabled, tasks))
         
     tasks.sort(key=lambda t: getattr(t, 'order', 10))
     tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))

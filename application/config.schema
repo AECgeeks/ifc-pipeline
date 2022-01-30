@@ -1,0 +1,14 @@
+{
+    "type": "object",
+    "properties": {
+        "tasks": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
+    "required": [
+        "tasks"
+    ]
+}
