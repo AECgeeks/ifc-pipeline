@@ -224,7 +224,8 @@ def do_process(id):
             tasks.append(mdl.task)
             
     tasks = list(filter(task_enabled, tasks))
-        
+    tasks_on_aggregate = list(filter(task_enabled, tasks_on_aggregate))
+
     tasks.sort(key=lambda t: getattr(t, 'order', 10))
     tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))
 
