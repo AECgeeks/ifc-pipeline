@@ -207,3 +207,28 @@ i.bimsurfer-tree-eye-off {
 .log tr:nth-child(2n) {
     background-color: #f0f0f0;
 }
+
+.start_sharing {
+    position: fixed;
+    bottom: 50px;
+    left: 50%;
+    width: 160px;
+    margin-left: -110px;
+    border-radius: 10px;
+    background: green;
+    padding: 10px 30px;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.start_sharing:hover {
+    background: rgb(0, 170, 0);
+}
+
+.start_sharing i {
+    color: white;
+    vertical-align: -6px;
+    padding-right: 10px;
+}

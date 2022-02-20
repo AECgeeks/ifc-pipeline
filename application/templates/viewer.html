@@ -119,5 +119,9 @@ fetch('/log/{{ id }}.json').then(function(r) { return r.text(); }).then(function
 });
 </script>
 
+{% if with_screen_share %}
+<div class="start_sharing"><i class="material-icons">ondemand_video</i> Start sharing</div>
+{% endif %}
+
 </body>
 </html>

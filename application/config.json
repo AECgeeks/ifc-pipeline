@@ -11,5 +11,10 @@
     ],
     "treeview": {
         "label": "{{attr.Name or attr.GlobalId}}"
+    },
+    "features": {
+        "screen_share": {
+            "enabled": false
+        }
     }
 }

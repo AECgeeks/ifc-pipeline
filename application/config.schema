@@ -15,9 +15,12 @@
                 }
             },
             "required": ["label"]
+        },
+        "features": {
+            "type": "object"
         }
     },
     "required": [
-        "tasks", "treeview"
+        "tasks", "treeview", "features"
     ]
 }

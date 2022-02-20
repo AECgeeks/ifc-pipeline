@@ -39,6 +39,7 @@ from flasgger import Swagger
 
 import utils
 import worker
+import config
 import database
 
 application = Flask(__name__)
@@ -246,7 +247,8 @@ def get_viewer(id):
         'viewer.html',
         id=id,
         n_files=n_files,
-        postfix=PIPELINE_POSTFIX
+        postfix=PIPELINE_POSTFIX,
+        with_screen_share=config.with_screen_share
     )
 
 
