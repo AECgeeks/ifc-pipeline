@@ -6,9 +6,18 @@
             "items": {
                 "type": "string"
             }
+        },
+        "treeview": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string"
+                }
+            },
+            "required": ["label"]
         }
     },
     "required": [
-        "tasks"
+        "tasks", "treeview"
     ]
 }

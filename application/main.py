@@ -271,7 +271,7 @@ def get_model(fn):
     if not utils.validate_id(id):
         abort(404)
   
-    if ext not in {"xml", "svg", "glb", "unoptimized.glb"}:
+    if ext not in {"xml", "svg", "glb", "unoptimized.glb", "tree.json"}:
         abort(404)
    
     path = utils.storage_file_for_id(id, ext)    

@@ -35,10 +35,11 @@ import operator
 import shutil
 
 import requests
-import jsonschema
 
 import utils
+import config
 import database
+
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
@@ -47,15 +48,7 @@ IFCCONVERT = os.path.join(exe_path, "IfcConvert") + ext
 if not os.path.exists(IFCCONVERT):
     IFCCONVERT = "IfcConvert"
 
-# parse configuration file
-config = json.load(open(os.path.join(os.path.dirname(__file__), "config.json")))
 
-# parse configuration schema and validate config
-schema = json.load(open(os.path.join(os.path.dirname(__file__), "config.schema")))
-jsonschema.validate(schema=schema, instance=config)
-
-# returns true if task is enabled in config
-task_enabled = lambda nm: nm.__name__ in config['tasks']
 
 def set_progress(id, progress):
     session = database.Session()
@@ -96,6 +89,22 @@ class xml_generation_task(task):
 
     def execute(self, directory, id):
         subprocess.call([IFCCONVERT, id + ".ifc", id + ".xml", "-yv"], cwd=directory)
+
+
+class xml_to_json_conversion(task):
+    est_time = 1
+    
+    def execute(self, directory, id):
+        print(
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), "process_xml_to_json.py"),
+            id
+        )
+        subprocess.check_call([
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), "process_xml_to_json.py"),
+            id
+        ], cwd=directory)
 
 
 class geometry_generation_task(task):
@@ -189,6 +198,7 @@ def do_process(id):
     tasks = [
         ifc_validation_task,
         xml_generation_task,
+        xml_to_json_conversion,
         geometry_generation_task,
         svg_generation_task,
         glb_optimize_task,
@@ -223,8 +233,8 @@ def do_process(id):
         else:
             tasks.append(mdl.task)
             
-    tasks = list(filter(task_enabled, tasks))
-    tasks_on_aggregate = list(filter(task_enabled, tasks_on_aggregate))
+    tasks = list(filter(config.task_enabled, tasks))
+    tasks_on_aggregate = list(filter(config.task_enabled, tasks_on_aggregate))
 
     tasks.sort(key=lambda t: getattr(t, 'order', 10))
     tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))
