@@ -46,8 +46,14 @@ unzip IfcConvert-v0.7.0-883b8a5-linux64.zip
 chmod +x IfcConvert
 cd ../../
 
+# Install IfcOpenShell-python
+RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-883b8a5-linux64.zip
+RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
+RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
+
 # Run flask with 
-./application/run_debug.sh
+cd application
+./run_debug.sh
 ~~~
 
 This will setup an environment for easy development, without Docker, which uses sqlite instead of postgresql and Python threads instead of the redis-backed RQ processing queue.
