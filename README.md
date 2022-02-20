@@ -37,6 +37,15 @@ See `application/Dockerfile` for setup instructions for the python dependencies
 # Create a symlink to the bimsurfer static files to be served by flask
 ln -s ./application/bimsurfer/bimsurfer ./application/static
 
+# Download the IfcConvert binary
+cd application
+mkdir nix
+cd nix/
+wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-883b8a5-linux64.zip
+unzip IfcConvert-v0.7.0-883b8a5-linux64.zip
+chmod +x IfcConvert
+cd ../../
+
 # Run flask with 
 ./application/run_debug.sh
 ~~~
