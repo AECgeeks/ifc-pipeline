@@ -4,6 +4,7 @@ require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewe
         svgDomNode: 'bottom',
         modelId: window.MODEL_ID,
         withTreeVisibilityToggle: true,
+        withTreeViewIcons: true,
         n_files: window.NUM_FILES
     });
     if (window.SPINNER_CLASS) {

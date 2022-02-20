@@ -64,8 +64,8 @@ h1.logo {
 .bimsurfer-static-tree div.bimsurfer-tree-label {
     margin-left: -100px;
     padding-left: 100px;
-    width: 1000px;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .bimsurfer-static-tree .bimsurfer-tree-children-with-indent {
@@ -77,12 +77,42 @@ h1.logo {
     color: white;
 }
 
-.bimsurfer-static-tree div.bimsurfer-tree-label:before {
-  content: "\21b3  ";
+.bimsurfer-static-tree div.bimsurfer-tree-label,
+.bimsurfer-static-tree div.bimsurfer-tree-label i {
+    font-size: 15px !important;
+    line-height: 24px !important;
 }
 
-.bimsurfer-static-tree div.bimsurfer-tree-eye:before {
-    content: "\1f441";
+.bimsurfer-static-tree div.bimsurfer-tree-label .collapse:before {
+  content: "\e5ce  ";
+}
+
+.bimsurfer-static-tree div.bimsurfer-tree-node-collapsed .collapse:before {
+  content: "\e5cf  ";
+}
+
+.bimsurfer-static-tree div.bimsurfer-tree-node-collapsed .item {
+  display: none;
+}
+
+.material-icons {
+  color: #444;
+}
+
+.bimsurfer-static-tree div.bimsurfer-tree-label i.icon.material-icons {
+  font-size: 24px !important;
+  margin-right: 0.3em;
+  vertical-align: -5px;
+}
+
+.bimsurfer-static-tree .bimsurfer-tree-eye {
+  float: right;
+  padding-right: 0.5em;
+  display: inline-block;
+}
+
+.bimsurfer-static-tree .bimsurfer-tree-eye:before {
+    content: "\e8f4";
 }
   
 .bimsurfer-tree-column {
@@ -90,8 +120,8 @@ h1.logo {
     overflow: hidden;
 }
 
-div.bimsurfer-tree-eye-off {
-    opacity: 0.5;
+i.bimsurfer-tree-eye-off {
+    opacity: 0.2 !important;
 }
 
 .bimsurfer-metadata h3 {
