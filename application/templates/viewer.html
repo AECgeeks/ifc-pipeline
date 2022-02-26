@@ -31,7 +31,12 @@
     {% endif %}
     <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
     
-    <script type="text/javascript">window.MODEL_ID = "{{ id }}"; window.SPINNER_CLASS = 'spinner'; window.NUM_FILES = {{ n_files or 0 }};</script>
+    <script type="text/javascript">
+        window.MODEL_ID = "{{ id }}";
+        window.SPINNER_CLASS = 'spinner';
+        window.NUM_FILES = {{ n_files or 0 }};
+        window.LIVE_SHARE_ID = {{ live_share_id | tojson }};
+    </script>
     <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App{{postfix}}.js"></script>
     <style>
         html, body {
@@ -120,7 +125,44 @@ fetch('/log/{{ id }}.json').then(function(r) { return r.text(); }).then(function
 </script>
 
 {% if with_screen_share %}
-<div class="start_sharing"><i class="material-icons">ondemand_video</i> Start sharing</div>
+
+{% if mode == 'listen' %}
+
+<div class="listen_mode">
+<span class='action' onclick='window.viewer.toggleLiveShare()'><i class="material-icons">ondemand_video</i> Live view</span>
+</div>
+
+<script type="text/javascript">
+    window.onViewerLoaded = () => {
+        window.viewer.listen("/live/{{ live_share_id }}");
+    };
+</script>
+
+{% else %}
+
+<script type="text/javascript">
+function copyToClipboard() {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(window.location.origin + "/live/{{ id }}/{{ live_share_id }}");
+    }
+}
+
+function toggleShare() {
+    let state = window.viewer.toggleLiveShare();
+    let url = document.querySelector(".start_sharing .url")
+    url.style.display = state ? "inline-block" : "none";
+    let caption = document.querySelector(".start_sharing .action span");
+    caption.innerHTML = (state ? "Stop" : "Start") + " sharing";
+}
+</script>
+
+<div class="start_sharing">
+<span class='action' onclick='toggleShare()'><i class="material-icons">ondemand_video</i> <span>Start sharing</span></span>
+<span class='url'><i class="material-icons">content_copy</i><pre><script>document.write(window.location.origin)</script>/live/{{ id }}/{{ live_share_id }}</pre>
+</div>
+
+{% endif %}
+
 {% endif %}
 
 </body>

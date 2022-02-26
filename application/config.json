@@ -14,7 +14,7 @@
     },
     "features": {
         "screen_share": {
-            "enabled": false
+            "enabled": true
         }
     }
 }

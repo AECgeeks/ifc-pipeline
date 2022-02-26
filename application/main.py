@@ -26,6 +26,7 @@ from __future__ import print_function
 
 import os
 import json
+import operator
 import threading
 
 from collections import defaultdict, namedtuple
@@ -49,6 +50,7 @@ dropzone = Dropzone(application)
 # application.config['DROPZONE_PARALLEL_UPLOADS'] = 3
 
 DEVELOPMENT = os.environ.get('environment', 'production').lower() == 'development'
+WITH_REDIS = os.environ.get('with_redis', 'false').lower() == 'true'
 
 
 if not DEVELOPMENT and os.path.exists("/version"):
@@ -77,11 +79,14 @@ application.config['SWAGGER'] = {
 }
 swagger = Swagger(application)
 
-if not DEVELOPMENT:
+if DEVELOPMENT and not WITH_REDIS:
+    redis_queue = None
+else:
     from redis import Redis
     from rq import Queue
-
-    q = Queue(connection=Redis(host=os.environ.get("REDIS_HOST", "localhost")), default_timeout=3600)
+    
+    redis = Redis(host=os.environ.get("REDIS_HOST", "localhost"))
+    redis_queue = Queue(connection=redis, default_timeout=3600)
 
 
 @application.route('/', methods=['GET'])
@@ -102,13 +107,11 @@ def process_upload(filewriter, callback_url=None):
     session.commit()
     session.close()
     
-    if DEVELOPMENT:
+    if redis_queue is None:
         t = threading.Thread(target=lambda: worker.process(id, callback_url))
         t.start()
-
-        
     else:
-        q.enqueue(worker.process, id, callback_url)
+        redis_queue.enqueue(worker.process, id, callback_url)
 
     return id
     
@@ -134,11 +137,11 @@ def process_upload_multiple(files, callback_url=None):
     session.commit()
     session.close()
     
-    if DEVELOPMENT:
+    if redis_queue is None:
         t = threading.Thread(target=lambda: worker.process(id, callback_url))
         t.start()        
     else:
-        q.enqueue(worker.process, id, callback_url)
+        redis_queue.enqueue(worker.process, id, callback_url)
 
     return id
 
@@ -222,7 +225,8 @@ def get_log(id, ext):
 
 
 @application.route('/v/<id>', methods=['GET'])
-def get_viewer(id):
+@application.route('/live/<id>/<channel>', methods=['GET'])
+def get_viewer(id, channel=None):
     if not utils.validate_id(id):
         abort(404)
     d = utils.storage_dir_for_id(id)
@@ -248,7 +252,9 @@ def get_viewer(id):
         id=id,
         n_files=n_files,
         postfix=PIPELINE_POSTFIX,
-        with_screen_share=config.with_screen_share
+        with_screen_share=config.with_screen_share,
+        live_share_id=channel or utils.generate_id(),
+        mode='listen' if channel else 'view'
     )
 
 
@@ -291,6 +297,41 @@ def get_model(fn):
         return response
     else:
         return send_file(path)
+
+        
+@application.route('/live/<channel>', methods=['POST'])
+def post_live_viewer_update(channel):
+    # body = request.get_json(force=True)
+    # @todo validate schema?
+    # body = json.dumps(body)
+    body = request.data.decode('ascii');
+    redis.publish(channel=f"live_{channel}", message=body)
+    return ""
+    
+
+@application.route('/live/<channel>', methods=['GET'])
+def get_viewer_update(channel):
+    def format(obj):
+        return f"data: {obj.decode('ascii')}\n\n"
+
+    def stream():
+        pubsub = redis.pubsub()
+        pubsub.subscribe(f"live_{channel}")
+        try:
+            msgs = pubsub.listen()
+            # for x in pl:
+            #     if x.get('type') == 'message':
+            #         yield format(json.loads(x['data']))
+            yield from map(format, \
+                map(operator.itemgetter('data'), \
+                filter(lambda x: x.get('type') == 'message', msgs)))
+        finally:
+            import traceback
+            traceback.print_exc()
+            try: pubsub.unsubscribe(channel)
+            except: pass
+    
+    return application.response_class(stream(), mimetype='text/event-stream')
 
 """
 # Create a file called routes.py with the following

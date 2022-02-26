@@ -107,8 +107,11 @@ h1.logo {
 
 .bimsurfer-static-tree .bimsurfer-tree-eye {
   float: right;
-  padding-right: 0.5em;
+  padding: 0 0.5em;
   display: inline-block;
+  background: white;
+  z-index: 1000;
+  position: relative;
 }
 
 .bimsurfer-static-tree .bimsurfer-tree-eye:before {
@@ -208,12 +211,13 @@ i.bimsurfer-tree-eye-off {
     background-color: #f0f0f0;
 }
 
-.start_sharing {
+.start_sharing,
+.listen_mode {
     position: fixed;
     bottom: 50px;
     left: 50%;
-    width: 160px;
-    margin-left: -110px;
+    width: 380px;
+    margin-left: -220px;
     border-radius: 10px;
     background: green;
     padding: 10px 30px;
@@ -227,8 +231,41 @@ i.bimsurfer-tree-eye-off {
     background: rgb(0, 170, 0);
 }
 
-.start_sharing i {
+.listen_mode {
+  background: orange;
+  cursor: default;
+}
+
+.start_sharing i,
+.listen_mode i {
     color: white;
     vertical-align: -6px;
     padding-right: 10px;
 }
+
+div.start_sharing > span.url > i {
+    vertical-align: 8px;
+}
+
+.start_sharing pre {
+    display: inline-block;
+    font-size: 70%;
+    overflow-wrap: anywhere;
+    width: 300px;
+    white-space: normal;
+}
+
+.start_sharing .action,
+.listen_mode .action {
+    display: block;
+}
+
+.start_sharing .url {
+    border: solid 1px #666;
+    background: #eee9;
+    color: #444;
+    padding: 2px 12px;
+    border-radius: 8px;
+    display: none;
+}
+

@@ -1,5 +1,5 @@
 require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewer) {
-    var v = new Viewer({
+    var v = window.viewer = new Viewer({
         domNode: 'right',
         svgDomNode: 'bottom',
         modelId: window.MODEL_ID,
@@ -16,4 +16,8 @@ require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewe
     v.load3d();
     v.loadMetadata('middle');
     v.loadTreeView('top');
+    
+    if (window.onViewerLoaded) {
+        window.onViewerLoaded(self);
+    }
 });
