@@ -16,5 +16,9 @@
         "screen_share": {
             "enabled": true
         }
+    },
+    "performance": {
+        "num_workers": 1,
+        "num_threads": "auto"
     }
 }

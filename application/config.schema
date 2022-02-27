@@ -14,13 +14,42 @@
                     "type": "string"
                 }
             },
-            "required": ["label"]
+            "required": [
+                "label"
+            ]
         },
         "features": {
             "type": "object"
+        },
+        "performance": {
+            "type": "object",
+            "properties": {
+                "num_workers": {
+                    "type": "integer"
+                },
+                "num_threads": {
+                    "oneOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string",
+                            "enum": [
+                                "auto"
+                            ]
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "num_workers"
+            ]
         }
     },
     "required": [
-        "tasks", "treeview", "features"
+        "tasks",
+        "treeview",
+        "features",
+        "performance"
     ]
 }

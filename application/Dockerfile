@@ -40,5 +40,6 @@ RUN uglifyjs --compress -o bimsurfer/lib/three.gltf.orbit.draco.min.js -- bimsur
 RUN rm -rf node_modules package-lock.json
 
 COPY application/queue.conf /etc/supervisord.conf
+RUN sed -i s/NUM_WORKERS/`python3 -c "import json; print(json.load(open('/www/config.json'))['performance']['num_workers'])"`/g /etc/supervisord.conf
 
 WORKDIR /www

@@ -49,6 +49,7 @@ import utils
 import config
 import database
 
+print(f"Using {config.num_threads} threads per worker")
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
@@ -133,10 +134,20 @@ class geometry_generation_task(task):
         f = context.models[id]
         settings = ifcopenshell.geom.settings(APPLY_DEFAULT_MATERIALS=True)
         sr = ifcopenshell.geom.serializers.gltf(utils.storage_file_for_id(id, "glb"), settings)
+        
         sr.writeHeader()
-        for progress, elem in ifcopenshell.geom.iterate(settings, f, with_progress=True, exclude=("IfcSpace", "IfcOpeningElement"), cache=utils.storage_file_for_id(id, "cache.h5")):
+        
+        for progress, elem in ifcopenshell.geom.iterate(
+            settings,
+            f,
+            with_progress=True,
+            exclude=("IfcSpace", "IfcOpeningElement"),
+            cache=utils.storage_file_for_id(id, "cache.h5"),
+            num_threads=config.num_threads
+        ):
             sr.write(elem)
             self.sub_progress(progress)
+        
         sr.finalize()
         
         with open(os.path.join(context.directory, f"log.json"), "w") as f:
@@ -203,9 +214,17 @@ class svg_generation_task(task):
         # sr.setAutoSection(True)
         
         sr.writeHeader()
+        
         for ii in context.input_ids:
             f = context.models[ii]
-            for progress, elem in ifcopenshell.geom.iterate(settings, f, with_progress=True, exclude=("IfcOpeningElement",), cache=utils.storage_file_for_id(self.id, "cache.h5")):
+            for progress, elem in ifcopenshell.geom.iterate(
+                settings,
+                f,
+                with_progress=True,
+                exclude=("IfcOpeningElement",),
+                cache=utils.storage_file_for_id(self.id, "cache.h5"),
+                num_threads=config.num_threads
+            ):
                 sr.write(elem)
                 self.sub_progress(progress)
 
