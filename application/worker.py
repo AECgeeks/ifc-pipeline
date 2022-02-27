@@ -32,7 +32,16 @@ import importlib
 import subprocess
 import tempfile
 import operator
+import itertools
 import shutil
+
+from multiprocessing import Process
+
+class ifcopenshell_file_dict(dict):
+    def __missing__(self, key):
+        import ifcopenshell
+        self[key] = ifcopenshell.open(utils.storage_file_for_id(key, 'ifc'))
+        return self[key]
 
 import requests
 
@@ -62,80 +71,85 @@ def set_progress(id, progress):
 
 
 class task(object):
-    def __init__(self, progress_map):
+    def __init__(self, id, progress_map):
         import inspect
         print(self.__class__.__name__, inspect.getfile(type(self)), *progress_map)
+        self.id = id
         self.begin, self.end = progress_map
 
     def sub_progress(self, i):
         set_progress(self.id, self.begin + (self.end - self.begin) * i / 100.)
 
-    def __call__(self, directory, id, *args):
-        self.id = id
-        self.execute(directory, id, *args)
+    def __call__(self, *args):
+        self.execute(*args)
         self.sub_progress(100)
 
 
 class ifc_validation_task(task):
     est_time = 1
 
-    def execute(self, directory, id):
-        with open(os.path.join(directory, "log.json"), "w") as f:
-            subprocess.call([sys.executable, "-m", "ifcopenshell.validate", id + ".ifc", "--json"], cwd=directory, stdout=f)
+    def execute(self, context, id):
+        import ifcopenshell.validate
+        
+        logger = ifcopenshell.validate.json_logger()
+        f = context.models[id]
+        
+        ifcopenshell.validate.validate(f, logger)
+                
+        with open(os.path.join(context.directory, "log.json"), "w") as f:
+            print("\n".join(json.dumps(x, default=str) for x in logger.statements), file=f)
 
 
 class xml_generation_task(task):
     est_time = 1
 
-    def execute(self, directory, id):
-        subprocess.call([IFCCONVERT, id + ".ifc", id + ".xml", "-yv"], cwd=directory)
+    def execute(self, context, id):
+        import ifcopenshell.geom
+        f = context.models[id]
+        sr = ifcopenshell.geom.serializers.xml(f, os.path.join(context.directory, f"{id}.xml"))
+        sr.finalize()
 
 
 class xml_to_json_conversion(task):
     est_time = 1
     
-    def execute(self, directory, id):
-        print(
-            sys.executable,
-            os.path.join(os.path.dirname(__file__), "process_xml_to_json.py"),
-            id
-        )
+    def execute(self, context, id):
         subprocess.check_call([
             sys.executable,
             os.path.join(os.path.dirname(__file__), "process_xml_to_json.py"),
             id
-        ], cwd=directory)
+        ], cwd=context.directory)
 
 
 class geometry_generation_task(task):
     est_time = 10
 
-    def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".glb", "-qyv", "--log-format", "json", "--log-file", "log.json"], cwd=directory, stdout=subprocess.PIPE)
-        i = 0
-        while True:
-            ch = proc.stdout.read(1)
-
-            if not ch and proc.poll() is not None:
-                break
-
-            if ch and ord(ch) == ord('.'):
-                i += 1
-                self.sub_progress(i)
-
-        # GLB generation is mandatory to succeed
-        if proc.poll() != 0:
-            raise RuntimeError()
-
+    def execute(self, context, id):
+        import ifcopenshell.geom
+        
+        ifcopenshell.ifcopenshell_wrapper.turn_off_detailed_logging()
+        ifcopenshell.ifcopenshell_wrapper.set_log_format_json()
+        
+        f = context.models[id]
+        settings = ifcopenshell.geom.settings(APPLY_DEFAULT_MATERIALS=True)
+        sr = ifcopenshell.geom.serializers.gltf(utils.storage_file_for_id(id, "glb"), settings)
+        sr.writeHeader()
+        for progress, elem in ifcopenshell.geom.iterate(settings, f, with_progress=True, exclude=("IfcSpace", "IfcOpeningElement"), cache=utils.storage_file_for_id(id, "cache.h5")):
+            sr.write(elem)
+            self.sub_progress(progress)
+        sr.finalize()
+        
+        with open(os.path.join(context.directory, f"log.json"), "w") as f:
+            f.write(ifcopenshell.get_log())
                 
 class glb_optimize_task(task):
     est_time = 1
     
-    def execute(self, directory, id):
+    def execute(self, context, id):
         try:
-            if subprocess.call(["gltf-pipeline" + ('.cmd' if on_windows else ''), "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=directory) == 0:
-                os.rename(os.path.join(directory, id + ".glb"), os.path.join(directory, id + ".unoptimized.glb"))
-                os.rename(os.path.join(directory, id + ".optimized.glb"), os.path.join(directory, id + ".glb"))
+            if subprocess.call(["gltf-pipeline" + ('.cmd' if on_windows else ''), "-i", id + ".glb", "-o", id + ".optimized.glb", "-b", "-d"], cwd=context.directory) == 0:
+                os.rename(os.path.join(context.directory, id + ".glb"), os.path.join(context.directory, id + ".unoptimized.glb"))
+                os.rename(os.path.join(context.directory, id + ".optimized.glb"), os.path.join(context.directory, id + ".glb"))
         except FileNotFoundError:
             pass
 
@@ -144,138 +158,165 @@ class gzip_task(task):
     est_time = 1
     order = 2000
     
-    def execute(self, directory, id):
+    def execute(self, context, id):
         import gzip
         for ext in ["glb", "xml", "svg"]:
-            fn = os.path.join(directory, id + "." + ext)
+            fn = os.path.join(context.directory, id + "." + ext)
             if os.path.exists(fn):
                 with open(fn, 'rb') as orig_file:
                     with gzip.open(fn + ".gz", 'wb') as zipped_file:
                         zipped_file.writelines(orig_file)
                         
                         
-class svg_rename_task(task):
-    """
-    In case of an upload of multiple files copy the SVG file
-    for an aspect model with [\w+]_[0-9].svg to [\w+].svg if
-    and only if the second file does not exist yet or the
-    first file is larger in terms of file size.
-    """
-    
-    est_time = 1
-    order = 1000
-    
-    def execute(self, directory, id):
-        svg1_fn = os.path.join(directory, id + ".svg")
-        svg2_fn = os.path.join(directory, id.split("_")[0] + ".svg")
-        
-        if os.path.exists(svg1_fn):
-            if os.path.exists(svg1_fn) and (not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn)):
-                shutil.copyfile(svg1_fn, svg2_fn)
-
-
 class svg_generation_task(task):
     est_time = 10
+    aggregate_model = True
 
-    def execute(self, directory, id):
-        proc = subprocess.Popen([IFCCONVERT, id + ".ifc", id + ".svg", "-qy", "--plan", "--model", "--section-height-from-storeys", "--door-arcs", "--print-space-names", "--print-space-areas", "--bounds=1024x1024", "--include", "entities", "IfcSpace", "IfcWall", "IfcWindow", "IfcDoor", "IfcAnnotation"], cwd=directory, stdout=subprocess.PIPE)
-        i = 0
-        while True:
-            ch = proc.stdout.read(1)
+    def execute(self, context):
+        import ifcopenshell.geom
 
-            if not ch and proc.poll() is not None:
+        settings = ifcopenshell.geom.settings(
+            INCLUDE_CURVES=True,
+            EXCLUDE_SOLIDS_AND_SURFACES=False,
+            APPLY_DEFAULT_MATERIALS=True,
+            DISABLE_TRIANGULATION=True
+        )
+
+        # cache = ifcopenshell.geom.serializers.hdf5("cache.h5", settings)
+        
+        sr = ifcopenshell.geom.serializers.svg(utils.storage_file_for_id(self.id, "svg"), settings)
+
+        # @todo determine file to select here or unify building storeys accross files somehow
+        sr.setFile(context.models[context.input_ids[0]])
+        sr.setSectionHeightsFromStoreys()
+
+        sr.setDrawDoorArcs(True)
+        sr.setPrintSpaceAreas(True)
+        sr.setPrintSpaceNames(True)
+        sr.setBoundingRectangle(1024., 1024.)
+        
+        sr.setProfileThreshold(128)
+        sr.setPolygonal(True)
+        sr.setAlwaysProject(True)
+        sr.setAutoElevation(True)
+
+        # sr.setAutoSection(True)
+        
+        sr.writeHeader()
+        for ii in context.input_ids:
+            f = context.models[ii]
+            for progress, elem in ifcopenshell.geom.iterate(settings, f, with_progress=True, exclude=("IfcOpeningElement",), cache=utils.storage_file_for_id(self.id, "cache.h5")):
+                sr.write(elem)
+                self.sub_progress(progress)
+
+        sr.finalize()
+
+
+class task_execution_context:
+    
+    def __init__(self, id):
+        self.id = id
+        self.directory = utils.storage_dir_for_id(id)
+        self.input_files = [name for name in os.listdir(self.directory) if os.path.isfile(os.path.join(self.directory, name)) and name.endswith(".ifc")]
+        self.models = ifcopenshell_file_dict()
+    
+        tasks = [
+            ifc_validation_task,
+            xml_generation_task,
+            xml_to_json_conversion,
+            geometry_generation_task,
+            glb_optimize_task,
+            gzip_task
+        ]
+        
+        tasks_on_aggregate = [
+            svg_generation_task
+        ]
+        
+        self.is_multiple = any("_" in n for n in self.input_files)
+        
+        self.n_files = len(self.input_files)
+        
+        self.input_ids = ["%s_%d" % (self.id, i) if self.is_multiple else self.id for i in range(self.n_files)]
+        
+        """
+        # Create a file called task_print.py with the following
+        # example content to add application-specific tasks
+
+        import sys
+        
+        from worker import task as base_task
+        
+        class task(base_task):
+            est_time = 1    
+            
+            def execute(self, context):
+                print("Executing task 'print' on ", context.id, ' in ', context.directory, file=sys.stderr)
+        """
+        
+        for fn in glob.glob("task_*.py"):
+            mdl = importlib.import_module(fn.split('.')[0])
+            if getattr(mdl.task, 'aggregate_model', False):
+                tasks_on_aggregate.append(mdl.task)
+            else:
+                tasks.append(mdl.task)
+                
+        self.tasks = list(filter(config.task_enabled, tasks))
+        self.tasks_on_aggregate = list(filter(config.task_enabled, tasks_on_aggregate))
+
+        self.tasks.sort(key=lambda t: getattr(t, 'order', 10))
+        self.tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))
+
+
+    def run(self):
+        elapsed = 0
+        set_progress(self.id, elapsed)
+        
+        
+        total_est_time = \
+            sum(map(operator.attrgetter('est_time'), self.tasks)) * self.n_files + \
+            sum(map(operator.attrgetter('est_time'), self.tasks_on_aggregate))
+            
+        def run_task(t, *args, aggregate_model=False):
+            nonlocal elapsed
+            begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
+            task = t(self.id, begin_end)
+            try:
+                task(self, *args)
+            except:
+                traceback.print_exc(file=sys.stdout)
+                # Mark ID as failed
+                with open(os.path.join(self.directory, 'failed'), 'w') as f:
+                    pass
+                return False
+            elapsed += t.est_time
+            return True
+
+        with_failure = False
+                
+        for t, ii in itertools.product(self.tasks, self.input_ids):
+            if not run_task(t, ii):
+                with_failure = True
                 break
+                
+        if not with_failure:
+            for t in self.tasks_on_aggregate:
+                run_task(t, aggregate_model=True)
 
-            if ch and ord(ch) == ord('.'):
-                i += 1
-                self.sub_progress(i)
+        elapsed = 100
+        set_progress(self.id, elapsed)        
 
 
 def do_process(id):
-    d = utils.storage_dir_for_id(id)
-    input_files = [name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))]
+    tec = task_execution_context(id)
+    # for local development
+    # tec.run()
 
-    tasks = [
-        ifc_validation_task,
-        xml_generation_task,
-        xml_to_json_conversion,
-        geometry_generation_task,
-        svg_generation_task,
-        glb_optimize_task,
-        gzip_task
-    ]
-    
-    tasks_on_aggregate = []
-    
-    is_multiple = any("_" in n for n in input_files)
-    if is_multiple:
-        tasks.append(svg_rename_task)
-    
-    """
-    # Create a file called task_print.py with the following
-    # example content to add application-specific tasks
-
-    import sys
-    
-    from worker import task as base_task
-    
-    class task(base_task):
-        est_time = 1    
-        
-        def execute(self, directory, id):
-            print("Executing task 'print' on ", id, ' in ', directory, file=sys.stderr)
-    """
-    
-    for fn in glob.glob("task_*.py"):
-        mdl = importlib.import_module(fn.split('.')[0])
-        if getattr(mdl.task, 'aggregate_model', False):
-            tasks_on_aggregate.append(mdl.task)
-        else:
-            tasks.append(mdl.task)
-            
-    tasks = list(filter(config.task_enabled, tasks))
-    tasks_on_aggregate = list(filter(config.task_enabled, tasks_on_aggregate))
-
-    tasks.sort(key=lambda t: getattr(t, 'order', 10))
-    tasks_on_aggregate.sort(key=lambda t: getattr(t, 'order', 10))
-
-    elapsed = 0
-    set_progress(id, elapsed)
-    
-    n_files = len([name for name in os.listdir(d) if os.path.isfile(os.path.join(d, name))])
-    
-    total_est_time = \
-        sum(map(operator.attrgetter('est_time'), tasks)) * n_files + \
-        sum(map(operator.attrgetter('est_time'), tasks_on_aggregate))
-        
-    def run_task(t, args, aggregate_model=False):
-        nonlocal elapsed
-        begin_end = (elapsed / total_est_time * 99, (elapsed + t.est_time) / total_est_time * 99)
-        task = t(begin_end)
-        try:
-            task(d, *args)
-        except:
-            traceback.print_exc(file=sys.stdout)
-            # Mark ID as failed
-            with open(os.path.join(d, 'failed'), 'w') as f:
-                pass
-            return False
-        elapsed += t.est_time
-        return True
-    
-    for i in range(n_files):
-        for t in tasks:
-            if not run_task(t, ["%s_%d" % (id, i) if is_multiple else id]):
-                break
-        # to break out of nested loop
-        else: continue
-        break
-            
-    for t in tasks_on_aggregate:
-        run_task(t, [id, input_files], aggregate_model=True)
-
-    elapsed = 100
-    set_progress(id, elapsed)
+    p = Process(target=task_execution_context.run, args=(tec,))
+    p.start()
+    p.join()
+    if p.exitcode != 0:
+        raise RuntimeError()
 
 
 def process(id, callback_url):
@@ -288,3 +329,4 @@ def process(id, callback_url):
 
     if callback_url is not None:       
         r = requests.post(callback_url, data={"status": status, "id": id})
+

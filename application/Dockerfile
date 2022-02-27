@@ -5,11 +5,11 @@ RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggest
 RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis sqlalchemy psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone jsonschema lxml
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
-# IfcConvert v0.6.0
-RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-883b8a5-linux64.zip -O /tmp/IfcConvert.zip
+# IfcConvert v0.7.0
+RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-e81dd9c-linux64.zip -O /tmp/IfcConvert.zip
 RUN unzip /tmp/IfcConvert.zip -d /usr/bin
 
-RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-883b8a5-linux64.zip
+RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-e81dd9c-linux64.zip
 RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
