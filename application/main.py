@@ -319,9 +319,6 @@ def get_viewer_update(channel):
         pubsub.subscribe(f"live_{channel}")
         try:
             msgs = pubsub.listen()
-            # for x in pl:
-            #     if x.get('type') == 'message':
-            #         yield format(json.loads(x['data']))
             yield from map(format, \
                 map(operator.itemgetter('data'), \
                 filter(lambda x: x.get('type') == 'message', msgs)))
@@ -331,7 +328,11 @@ def get_viewer_update(channel):
             try: pubsub.unsubscribe(channel)
             except: pass
     
-    return application.response_class(stream(), mimetype='text/event-stream')
+    return application.response_class(
+        stream(),
+        mimetype='text/event-stream',
+        headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'},
+    )
 
 """
 # Create a file called routes.py with the following

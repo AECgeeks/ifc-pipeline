@@ -3,7 +3,7 @@ FROM ubuntu:latest
 WORKDIR /
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel supervisor libjpeg-dev
-RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis sqlalchemy psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone jsonschema lxml
+RUN python3 -m pip install flask flask-cors numpy Pillow gunicorn rq redis sqlalchemy psycopg2 sqlalchemy-utils Flask-BasicAuth flasgger requests flask-dropzone jsonschema lxml gevent
 RUN npm install -g jsdoc gltf-pipeline requirejs npx uglify-js
 
 # IfcConvert v0.7.0

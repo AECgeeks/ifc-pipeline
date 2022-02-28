@@ -21,7 +21,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    entrypoint: sh -c 'python3 database.py; gunicorn --bind 0.0.0.0:5000 -w 8 --access-logfile - --error-logfile - wsgi'
+    entrypoint: sh -c 'python3 database.py; gunicorn --bind 0.0.0.0:5000 --worker-class gevent -w 8 --access-logfile - --error-logfile - wsgi'
     environment:
       - MODEL_DIR=/data
       - REDIS_HOST=redis
