@@ -25,6 +25,7 @@
 from __future__ import print_function
 
 import os
+import glob
 import json
 import operator
 import threading
@@ -33,7 +34,7 @@ from collections import defaultdict, namedtuple
 from flask_dropzone import Dropzone
 
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response
+from flask import Flask, request, send_file, render_template, abort, jsonify, redirect, url_for, make_response, send_from_directory
 from flask_cors import CORS
 from flask_basicauth import BasicAuth
 from flasgger import Swagger
@@ -43,7 +44,10 @@ import worker
 import config
 import database
 
-application = Flask(__name__)
+# We have a custom static file handler that serves two directories,
+# but None cannot be supplied here because flask-dropzone depends on
+# it.
+application = Flask(__name__, static_folder="non-existant")
 dropzone = Dropzone(application)
 
 # application.config['DROPZONE_UPLOAD_MULTIPLE'] = True
@@ -307,7 +311,16 @@ def post_live_viewer_update(channel):
     body = request.data.decode('ascii');
     redis.publish(channel=f"live_{channel}", message=body)
     return ""
-    
+
+
+@application.route('/static/<path:filename>')
+def static_handler(filename):
+    filenames = [os.path.join(root, fn)[len("static")+1:] for root, dirs, files in os.walk("static", topdown=False) for fn in files]
+    if filename in filenames:
+        return send_from_directory("static", filename)    
+    else:
+        return send_from_directory("bimsurfer", filename)
+
 
 @application.route('/live/<channel>', methods=['GET'])
 def get_viewer_update(channel):
