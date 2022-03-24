@@ -45,12 +45,12 @@ cd ..
 mkdir nix
 cd nix/
 wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-883b8a5-linux64.zip
-unzip IfcConvert-v0.7.0-883b8a5-linux64.zip
+unzip IfcConvert-v0.7.0-b5133c6-linux64.zip
 chmod +x IfcConvert
 cd ..
 
 # Install IfcOpenShell-python
-wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-883b8a5-linux64.zip
+wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-b5133c6-linux64.zip
 mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
