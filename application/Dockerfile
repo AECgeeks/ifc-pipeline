@@ -19,7 +19,7 @@ COPY application/*.py application/*.txt application/config.json application/conf
 COPY application/templates /www/templates
 
 # Python dependencies
-RUN python3 -m pip install -r application/requirements-production.txt
+RUN python3 -m pip install -r requirements-production.txt
 
 COPY .git/HEAD /tmp/.git/HEAD
 COPY .git/refs/ /tmp/.git/refs/
