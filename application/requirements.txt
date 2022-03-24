@@ -1,0 +1,10 @@
+flask
+flask-cors
+sqlalchemy
+sqlalchemy-utils
+Flask-BasicAuth
+flasgger
+requests
+flask-dropzone
+jsonschema
+lxml
