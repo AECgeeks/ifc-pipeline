@@ -50,9 +50,9 @@ chmod +x IfcConvert
 cd ..
 
 # Install IfcOpenShell-python
-RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-883b8a5-linux64.zip
-RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
-RUN unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
+wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-883b8a5-linux64.zip
+mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
+unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
 # Run flask with dev environment variables
 ./run_debug.sh
