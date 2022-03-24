@@ -206,10 +206,12 @@ class svg_generation_task(task):
         sr.setPrintSpaceNames(True)
         sr.setBoundingRectangle(1024., 1024.)
         
+        """
         sr.setProfileThreshold(128)
         sr.setPolygonal(True)
         sr.setAlwaysProject(True)
         sr.setAutoElevation(True)
+        """
 
         # sr.setAutoSection(True)
         
@@ -225,7 +227,11 @@ class svg_generation_task(task):
                 cache=utils.storage_file_for_id(self.id, "cache.h5"),
                 num_threads=config.num_threads
             ):
-                sr.write(elem)
+                try:
+                    sr.write(elem)
+                except:
+                    print("On %s:" % f[elem.id])
+                    traceback.print_exc(file=sys.stdout)
                 self.sub_progress(progress)
 
         sr.finalize()
