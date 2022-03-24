@@ -235,6 +235,9 @@ def get_viewer(id, channel=None):
         abort(404)
     d = utils.storage_dir_for_id(id)
     
+    if not os.path.exists(d):
+        abort(404)
+    
     ifc_files = [os.path.join(d, name) for name in os.listdir(d) if os.path.isfile(os.path.join(d, name)) and name.endswith('.ifc')]
     
     if len(ifc_files) == 0:
