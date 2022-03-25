@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>IFC pipeline viewer embed API example</title>
+
+  <!-- Code includes for the 3d and 2d viewer -->
+  <script type="text/javascript" src="https://view.ifcopenshell.org/static/bimsurfer/lib/three.gltf.orbit.draco.min.js"></script>
+  <script type="text/javascript" src="https://view.ifcopenshell.org/static/bimsurfer/lib/svg-pan-zoom.js"></script>
+
+  <!-- Optional stylesheet mainly for tree view -->
+  <link rel='stylesheet' href="https://view.ifcopenshell.org/static/main.css" />
+  
+  <!-- Optional icons for tree view -->
+  <link href="https://fonts.googleapis.com/css?family=Material+Icons|Material+Icons+Outlined|Material+Icons+Two+Tone|Material+Icons+Round|Material+Icons+Sharp" rel="stylesheet">
+    
+  <!-- The current version of the code is based on RequireJS -->
+  <script>
+    var require = {
+        waitSeconds : 30,
+        paths: {bimsurfer: "https://view.ifcopenshell.org/static/bimsurfer"}
+    }
+  </script>
+  <script src='https://view.ifcopenshell.org/static/bimsurfer/lib/require.js'></script>
+  
+  <!-- The embed API uses the MultiModal class, which offers synchronized browsing
+       of 3d, 2d, tree view and meta-data, all derived from artefacts of IfcConvert -->
+  <script>
+    function loadModel() {
+      require(["bimsurfer/src/MultiModal", "bimsurfer/lib/domReady!"], function (Viewer) {
+        var v = window.viewer = new Viewer({
+            domNode: 'view_3d',
+            svgDomNode: 'view_2d',
+            modelId: document.querySelector('#modelId').value,
+            withTreeVisibilityToggle: true,
+            withTreeViewIcons: true,
+            n_files: 1
+        });
+        v.setSpinner({className: 'spinner'});
+        v.load2d();
+        v.load3d();
+        v.loadMetadata('view_meta');
+        v.loadTreeView('view_tree');
+        
+        if (window.onViewerLoaded) {
+            window.onViewerLoaded(self);
+        }
+      });
+    }
+  </script>
+  
+  <!-- Some quick and dirty CSS just for this page -->
+  <style>
+    body {
+      padding: 80px;
+      box-sizing: border-box;
+    }
+    .grid {
+      min-height: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      flex-direction: row;
+    }
+    .grid > div {
+      display: flex; 
+      flex-basis: 50%;  
+      flex-direction: column;
+    }
+    .grid > div > div {
+      position: relative;
+      height: 300px;
+    }
+    .meta {
+      overflow-y: scroll
+    }
+  </style>
+</head>
+<body>
+
+  <label for='modelId'>IFC-pipeline model id</label>
+  <input id='modelId' value='XnxNTgbRCKrxVyrGStGgyiraJUAwxjHW' /><input type='button' onclick='loadModel()' value='load'/>
+
+  <div class="grid">
+    <div>
+      <h2>Tree view</h2>
+      <div id='view_tree' class="bimsurfer-static-tree"></div>
+    </div>
+    
+    <div>
+      <h2>3D view</h2>
+      <div id='view_3d'></div>
+    </div>
+  
+    <div>
+      <h2>2D view</h2>
+      <div id='view_2d'></div>
+    </div>      
+      
+    <div>
+      <h2>Meta-data view</h2>
+      <div id='view_meta' class='meta'></div>
+    </div>
+  </div>
+  
+</body>
+</html>
