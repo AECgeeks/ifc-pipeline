@@ -45,13 +45,13 @@ python -m pip -r requirements.txt
 # Download the IfcConvert binary
 mkdir nix
 cd nix/
-wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-b5133c6-linux64.zip
-unzip IfcConvert-v0.7.0-b5133c6-linux64.zip
+wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-2985bba-linux64.zip
+unzip IfcConvert-v0.7.0-2985bba-linux64.zip
 chmod +x IfcConvert
 cd ..
 
 # Install IfcOpenShell-python
-wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-b5133c6-linux64.zip
+wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-2985bba-linux64.zip
 mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
@@ -61,11 +61,11 @@ unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifco
 
 ### Windows
 
-* Download https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-b5133c6-win64.zip
+* Download https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-2985bba-win64.zip
 * Extract and unzip and place IfcConvert.exe in a newly created directory `.\application\win\IfcConvert.exe`
 * Lookup you python version with: `python -c "import sys; print(sys.version_info);"`
 * Take the `major` and `minor` number and replace the `XY` in the URL below with those numbers. For for Python 3.10.x use `31`
-* Download https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-XY-v0.7.0-b5133c6-linux64.zip
+* Download https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-XY-v0.7.0-2985bba-linux64.zip
 * Take note of your python site-packages directory with `python -c "import site; print(site.USER_SITE)"`
 * Extract and unzip and place into the site-packages folder of your python interpreter
 * The result should be a directory structure with `...\site-packages\ifcopenshell\__init__.py`
