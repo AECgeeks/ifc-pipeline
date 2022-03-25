@@ -33,18 +33,19 @@ Clone the ifc-pipeline repo recursively (with submodules)
 
 See `application/Dockerfile` for setup instructions for the python dependencies
 
+### Linux
+
+This will setup an environment for easy development, without Docker, which uses sqlite instead of postgresql and Python threads instead of the redis-backed RQ processing queue.
+
 ~~~sh
 cd application
 
-# Create a symlink to the bimsurfer static files to be served by flask
-cd static
-ln -s ../bimsurfer/bimsurfer .
-cd ..
+python -m pip -r requirements.txt
 
 # Download the IfcConvert binary
 mkdir nix
 cd nix/
-wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-883b8a5-linux64.zip
+wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-b5133c6-linux64.zip
 unzip IfcConvert-v0.7.0-b5133c6-linux64.zip
 chmod +x IfcConvert
 cd ..
@@ -58,7 +59,17 @@ unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifco
 ./run_debug.sh
 ~~~
 
-This will setup an environment for easy development, without Docker, which uses sqlite instead of postgresql and Python threads instead of the redis-backed RQ processing queue.
+### Windows
+
+* Download https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-b5133c6-win64.zip
+* Extract and unzip and place IfcConvert.exe in a newly created directory `.\application\win\IfcConvert.exe`
+* Lookup you python version with: `python -c "import sys; print(sys.version_info);"`
+* Take the `major` and `minor` number and replace the `XY` in the URL below with those numbers. For for Python 3.10.x use `31`
+* Download https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-XY-v0.7.0-b5133c6-linux64.zip
+* Take note of your python site-packages directory with `python -c "import site; print(site.USER_SITE)"`
+* Extract and unzip and place into the site-packages folder of your python interpreter
+* The result should be a directory structure with `...\site-packages\ifcopenshell\__init__.py`
+* Use run_debug.bat to start the application
 
 ## Production deployment
 
