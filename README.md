@@ -31,8 +31,6 @@ In the front-end the BIMsurfer2 viewer module takes the various converted artefa
 
 Clone the ifc-pipeline repo recursively (with submodules)
 
-See `application/Dockerfile` for setup instructions for the python dependencies
-
 ### Linux
 
 This will setup an environment for easy development, without Docker, which uses sqlite instead of postgresql and Python threads instead of the redis-backed RQ processing queue.
@@ -40,7 +38,7 @@ This will setup an environment for easy development, without Docker, which uses 
 ~~~sh
 cd application
 
-python -m pip -r requirements.txt
+python3 -m pip -r requirements.txt
 
 # Download the IfcConvert binary
 mkdir nix
@@ -51,7 +49,7 @@ chmod +x IfcConvert
 cd ..
 
 # Install IfcOpenShell-python
-wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-v0.7.0-2985bba-linux64.zip
+wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2]))[0:2])'`-v0.7.0-2985bba-linux64.zip
 mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
 unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip
 
@@ -61,6 +59,7 @@ unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifco
 
 ### Windows
 
+* Install Python dependencies with `python -m pip -r .\application\requirements.txt`
 * Download https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-v0.7.0-2985bba-win64.zip
 * Extract and unzip and place IfcConvert.exe in a newly created directory `.\application\win\IfcConvert.exe`
 * Lookup you python version with: `python -c "import sys; print(sys.version_info);"`
