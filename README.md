@@ -8,6 +8,7 @@ There is a small web application in Flask that accepts file uploads. HTTPS is pr
 
 ![Architecture diagram of ifc-pipeline](img/architecture.png "Architecture diagram of ifc-pipeline")
 
+### Routes
 
 There is a front-end in flask with the following routes:
 
@@ -17,7 +18,7 @@ There is a front-end in flask with the following routes:
 - `GET /pp/<id>` JSON progress
 - `GET /log/<id>.<ext>` Conversion log. ext: html|json
 - `GET /v/<id>` HTML viewer page
-- `GET /m/<id>.<ext>` Artefact download. ext eg: xml|svg|glb
+- `GET /m/<id>.<ext>` Artefact download. ext eg: `.svg` | `.glb` | `.tree.json`
 
 In the backend there is a worker process that uses IfcOpenShell's IfcConvert to convert the incoming IFC models into XML (for decomposition structure and property set data), glTF for 3D geometry and SVG for 2D floor plan geometry.
 
