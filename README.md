@@ -65,7 +65,7 @@ unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifco
 * Extract and unzip and place IfcConvert.exe in a newly created directory `.\application\win\IfcConvert.exe`
 * Lookup you python version with: `python -c "import sys; print(sys.version_info);"`
 * Take the `major` and `minor` number and replace the `XY` in the URL below with those numbers. For for Python 3.10.x use `31`
-* Download https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-XY-v0.7.0-2985bba-linux64.zip
+* Download https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-XY-v0.7.0-2985bba-win64.zip
 * Take note of your python site-packages directory with `python -c "import site; print(site.USER_SITE)"`
 * Extract and unzip and place into the site-packages folder of your python interpreter
 * The result should be a directory structure with `...\site-packages\ifcopenshell\__init__.py`
