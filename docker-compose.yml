@@ -40,7 +40,6 @@ services:
       - frontend
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt

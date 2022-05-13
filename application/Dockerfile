@@ -26,13 +26,11 @@ RUN /bin/bash -c '(cat /tmp/.git/$(cat /tmp/.git/HEAD | cut -d \  -f 2)) || cat 
 RUN sed -i "4i<script>console.log('pipeline version: $(cat /version)');</script>" /www/templates/*.html
 RUN rm -rf /tmp/.git
 
-RUN npm i -D @babel/preset-env @babel/core @babel/cli
-
 COPY application/static /www/static/
-COPY application/bimsurfer/bimsurfer /www/static/bimsurfer
+COPY application/bimsurfer /www/bimsurfer
 
 WORKDIR /www/static
-RUN npm -i && webpack --env postfix=$(cat /version) && rm -rf node_modules
+RUN npm i && npx webpack --env postfix=$(cat /version) && rm -rf node_modules
 
 COPY application/queue.conf /etc/supervisord.conf
 RUN sed -i s/NUM_WORKERS/`python3 -c "import json; print(json.load(open('/www/config.json'))['performance']['num_workers'])"`/g /etc/supervisord.conf
