@@ -4,6 +4,7 @@ __pycache__/
 *.cover
 docker-volumes
 application/static/bimsurfer
+application/static/node_modules
 application/nix
 application/win
 application/ifc-pipeline.db

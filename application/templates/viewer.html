@@ -7,8 +7,6 @@
     <link href="https://fonts.googleapis.com/css?family=Material+Icons|Material+Icons+Outlined|Material+Icons+Two+Tone|Material+Icons+Round|Material+Icons+Sharp" rel="stylesheet">
     <link rel="stylesheet" href="/static/main.css"/>
     
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-
     <script type="text/javascript">
         var isIE = !!window.MSInputMethodContext;
         if (isIE) {
@@ -20,15 +18,7 @@
             document.write('<script type="text/javascript" src="/static/lib/Object.assign.js"><\/script>');
         }
     </script>
-    
-    {% if postfix %}
-    <script type="text/javascript" src="/static/bimsurfer/lib/three.gltf.orbit.draco.min.js"></script>
-    {% else %}
-    <script type="text/javascript" src="/static/bimsurfer/lib/three.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/OrbitControls.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/GLTFLoader.js"></script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/DRACOLoader.js"></script>
-    {% endif %}
+
     <script type="text/javascript" src="/static/bimsurfer/lib/svg-pan-zoom.js"></script>
     
     <script type="text/javascript">
@@ -37,7 +27,18 @@
         window.NUM_FILES = {{ n_files or 0 }};
         window.LIVE_SHARE_ID = {{ live_share_id | tojson }};
     </script>
-    <script type="text/javascript" src="/static/bimsurfer/lib/require.js" data-main="/static/App{{postfix}}.js"></script>
+    
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/static/bimsurfer/lib/three/r140/three.module.js"
+        }
+    }
+    </script>
+       
+    <script type="module" src="/static/App{{postfix}}.js"></script>
     <style>
         html, body {
             margin: 0;
