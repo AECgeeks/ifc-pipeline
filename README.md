@@ -109,3 +109,8 @@ By default the nginx container listens on 80 and 443. Edit docker-compose.yml to
   print(json.dumps([m.serialize() for m in s.query(database.model).filter(database.model.date+datetime.timedelta(days=2)>datetime.datetime.now()).order_by(database.model.date).all()], default=str))
   "
   ~~~
+
+
+### Infrastructure model
+
+![Infrastructure model](.infragenie/infrastructure_model.png)
