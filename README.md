@@ -39,7 +39,7 @@ This will setup an environment for easy development, without Docker, which uses 
 ~~~sh
 cd application
 
-python3 -m pip -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 # Download the IfcConvert binary
 mkdir nix
