@@ -4,8 +4,8 @@ module.exports = env => ({
   entry: './App.js',
   resolve: {
     alias: {
-      './bimsurfer': path.resolve(__dirname, '../bimsurfer/bimsurfer'),
-      'three': path.resolve(__dirname, '../bimsurfer/bimsurfer/lib/three/r140/three.module.js'),
+      './bimsurfer': path.resolve(__dirname, '../bimsurfer'),
+      'three': path.resolve(__dirname, '../bimsurfer/src/v2/bimsurfer/lib/three/r140/three.module.js'),
     }
   },
   output: {
