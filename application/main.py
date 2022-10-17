@@ -318,11 +318,11 @@ def post_live_viewer_update(channel):
 
 @application.route('/static/<path:filename>')
 def static_handler(filename):
-    filenames = [os.path.join(root, fn)[len("static")+1:] for root, dirs, files in os.walk("static", topdown=False) for fn in files]
-    if filename in filenames:
-        return send_from_directory("static", filename)    
+    # filenames = [os.path.join(root, fn)[len("static")+1:] for root, dirs, files in os.walk("static", topdown=False) for fn in files]
+    if filename.startswith("bimsurfer/"):
+        return send_from_directory("bimsurfer", "/".join(filename.split("/")[1:]))
     else:
-        return send_from_directory("bimsurfer", filename)
+        return send_from_directory("static", filename)
 
 
 @application.route('/live/<channel>', methods=['GET'])
