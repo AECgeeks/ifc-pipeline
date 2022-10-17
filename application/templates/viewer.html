@@ -98,14 +98,28 @@
         #footer a i {
             font-size: 24px;
         }
+        .button {
+            border: solid 1px #ddd;
+            border-radius: 4px;
+            display: inline-block;
+            cursor: pointer;
+            width: 240px;
+            padding: 4px;
+            font-size: 14pt;
+            line-height: 20pt;
+            text-align: center;
+        }
+        .button:hover {
+            border-color: #bbb;
+            background: #f0f0f0;
+        }
+        .button .material-icons {
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
     
-<div class="button" id="changeEngine" style="position: absolute; right: 25%; bottom: 30px">
-    <span class="material-icons">video_settings</span> Toggle engine
-</div>
-
 <div id='left'>
 <div id='top' class='bimsurfer-static-tree'></div>
 <div id='middle' class='bimsurfer-metadata'></div>
@@ -169,6 +183,10 @@ function toggleShare() {
 {% endif %}
 
 {% endif %}
+
+<div class="button" id="changeEngine" style="position: absolute; right: 10px; bottom: 40px">
+    <span class="material-icons">video_settings</span> Toggle engine
+</div>
 
 <script>
     document.querySelector("#changeEngine").onclick = () => {
