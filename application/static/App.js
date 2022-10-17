@@ -16,12 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
     withTreeVisibilityToggle: true,
     withTreeViewIcons: true,
     n_files: window.NUM_FILES,
+    withShadows: true,
+    engine3d: localStorage.getItem('engine') || 'threejs'
   });
+
   if (window.SPINNER_CLASS) {
     v.setSpinner({className: window.SPINNER_CLASS});
   } else if (window.SPINNER_URL) {
     v.setSpinner({url: window.SPINNER_URL});
   }
+  
   v.load2d();
   v.load3d();
   v.loadMetadata('middle');

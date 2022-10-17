@@ -101,6 +101,10 @@
     </style>
 </head>
 <body>
+    
+<div class="button" id="changeEngine" style="position: absolute; right: 25%; bottom: 30px">
+    <span class="material-icons">video_settings</span> Toggle engine
+</div>
 
 <div id='left'>
 <div id='top' class='bimsurfer-static-tree'></div>
@@ -165,6 +169,16 @@ function toggleShare() {
 {% endif %}
 
 {% endif %}
+
+<script>
+    document.querySelector("#changeEngine").onclick = () => {
+        let engine = localStorage.getItem("engine") || "threejs";
+        let engines = ["threejs", "bimsurfer3"];
+        engine = engines.filter(x => x != engine)[0];
+        localStorage.setItem("engine", engine);
+        window.location = window.location;
+    }
+</script>
 
 </body>
 </html>
