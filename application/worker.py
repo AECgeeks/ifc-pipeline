@@ -52,13 +52,6 @@ import database
 print(f"Using {config.num_threads} threads per worker")
 
 on_windows = platform.system() == 'Windows'
-ext = ".exe" if on_windows else ""
-exe_path = os.path.join(os.path.dirname(__file__), "win" if on_windows else "nix")
-IFCCONVERT = os.path.join(exe_path, "IfcConvert") + ext
-if not os.path.exists(IFCCONVERT):
-    IFCCONVERT = "IfcConvert"
-
-
 
 def set_progress(id, progress):
     session = database.Session()
