@@ -2,7 +2,10 @@ FROM ubuntu:latest
 
 WORKDIR /
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev npm python3-setuptools python3-dev python3-wheel supervisor libjpeg-dev
+RUN apt-get -y update && apt-get -y --no-install-recommends --no-install-suggests install python3 python3-pip unzip wget libpq-dev build-essential libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev python3-setuptools python3-dev python3-wheel supervisor libjpeg-dev
+RUN wget -qO- https://nodejs.org/dist/v16.18.0/node-v16.18.0-linux-x64.tar.gz | tar -xzC /opt
+ENV PATH /opt/node-v16.18.0-linux-x64/bin:$PATH
+RUN npm install -g jsdoc gltf-pipeline
 
 RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2]))[0:2])'`-v0.7.0-b5133c6-linux64.zip
 RUN mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'`
