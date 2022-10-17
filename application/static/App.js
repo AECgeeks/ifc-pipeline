@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     withTreeViewIcons: true,
     n_files: window.NUM_FILES,
     withShadows: true,
-    engine3d: localStorage.getItem('engine') || 'threejs'
+    engine3d: localStorage.getItem('engine') || 'threejs',
+    fromPipeline: true
   });
 
   if (window.SPINNER_CLASS) {
