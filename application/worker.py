@@ -125,7 +125,10 @@ class geometry_generation_task(task):
         ifcopenshell.ifcopenshell_wrapper.set_log_format_json()
         
         f = context.models[id]
-        settings = ifcopenshell.geom.settings(APPLY_DEFAULT_MATERIALS=True)
+        settings = ifcopenshell.geom.settings(
+            WELD_VERTICES=False,
+            APPLY_DEFAULT_MATERIALS=True
+        )
         sr = ifcopenshell.geom.serializers.gltf(utils.storage_file_for_id(id, "glb"), settings)
         
         sr.writeHeader()
