@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modelId: window.MODEL_ID,
     withTreeVisibilityToggle: true,
     withTreeViewIcons: true,
+    treeLoadUntil: 3,
     n_files: window.NUM_FILES,
     withShadows: true,
     engine3d: localStorage.getItem('engine') || 'threejs',
