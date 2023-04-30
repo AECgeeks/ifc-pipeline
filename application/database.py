@@ -58,33 +58,16 @@ class model(Base, Serializable):
     id = Column(Integer, primary_key=True)
     code = Column(String)
     filename = Column(String)
-    files = relationship("file")
+    meta = Column(String)
     
     progress = Column(Integer, default=-1)
     date = Column(DateTime, server_default=func.now())
 
-    def __init__(self, code, filename):
-        self.code = code
-        self.filename = filename
-
-
-class file(Base, Serializable):
-    __tablename__ = 'files'
-
-    id = Column(Integer, primary_key=True)
-    code = Column(String)
-    filename = Column(String)
- 
-    model_id = Column(Integer, ForeignKey('models.id'))
-
-    progress = Column(Integer, default=-1)
-    date = Column(DateTime, server_default=func.now())
+    error = Column(String)
 
     def __init__(self, code, filename):
         self.code = code
         self.filename = filename
-        
-        self.model_id = Column(Integer, ForeignKey('models.id'))
 
 
 def initialize():

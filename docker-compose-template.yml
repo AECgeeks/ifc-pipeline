@@ -85,9 +85,8 @@ services:
     depends_on:
       - frontend
     ports:
-      - "80:80"
+      - "8080:80"
     {% if with_https %}
-      - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
@@ -103,12 +102,6 @@ services:
     {% endif %}
     labels:
       kompose.service.type: loadbalancer
-    
-  voxel:
-    build: voxel_server
-    image: aecgeeks/voxel-server:release-0.3.1
-    expose:
-      - "5000"    
   
   {% if with_https %}
   certbot:
@@ -143,6 +136,7 @@ services:
       - POSTGRES_HOST={{ db_host or 'db' }}
       - POSTGRES_USER={{ db_user or 'postgres' }}
       - POSTGRES_PASS={{ db_pass or 'postgres' }}
+      - VOXEC_RLIMIT_AS_MB=16000
     depends_on:
       - redis
   {% if not db_host %}

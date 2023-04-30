@@ -1,1 +1,1 @@
-environment=development FLASK_APP=main.py FLASK_ENV=development python3 -m flask run -h 0.0.0.0
+environment=development FLASK_APP=main.py FLASK_ENV=development python3 -m flask run -h 0.0.0.0 -p 8080

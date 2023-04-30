@@ -90,13 +90,23 @@ def get_main():
     return render_template('index.html')
 
 
-def queue_task(task_name, *args):
+def queue_task(task_name, *args, depends=None):
     fn = getattr(worker, task_name)
+
+    assert hasattr(fn, 'original')
+
     if DEVELOPMENT:
-        t = threading.Thread(target=lambda: fn(*args, **{'development':DEVELOPMENT}))
+        t = threading.Thread(target=lambda: fn(*args))
         t.start()
     else:
-        q.enqueue(fn, *args, **{'development':DEVELOPMENT})
+        if depends is None:
+            depends = []
+        else:
+            depends = map(q.fetch_job, depends)
+            # When fetch_job() returns None, the task
+            # is finished and cleaned up already. 
+            depends = list(filter(None, depends))
+        q.enqueue(fn, *args, job_id=args[0], depends_on=depends)
 
 
 def process_upload(filewriter, callback_url=None, translation=None):
@@ -106,7 +116,7 @@ def process_upload(filewriter, callback_url=None, translation=None):
     
     filewriter(os.path.join(d, id+".ifc"))
     
-    utils.store_file(id, "ifc")
+    utils.store_file(id, extension="ifc")
     
     session = database.Session()
     session.add(database.model(id, ''))
@@ -134,21 +144,15 @@ def process_upload_multiple(files, callback_url=None):
         id_ = "%s_%d" % (id, file_id)
         id_ = id
         filewriter(os.path.join(d, id_ + ".ifc"))
-        utils.store_file(id_, "ifc")
+        utils.store_file(id_, extension="ifc")
         file_id += 1
-        m.files.append(database.file(id, ''))
     
     session.commit()
     session.close()
     
-    if DEVELOPMENT:
-        t = threading.Thread(target=lambda: worker.process(id, callback_url))
-        t.start()        
-    else:
-        q.enqueue(worker.process, id, callback_url)
+    queue_task("process", id, callback_url)
 
     return id
-
 
 
 @application.route('/', methods=['POST'])

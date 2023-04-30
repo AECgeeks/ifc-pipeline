@@ -60,27 +60,26 @@ def ensure_file(id, ext, **kwargs):
     path = storage_file_for_id(id, ext, ensure=False, **kwargs)
     if os.environ.get("MINIO_HOST"):
         if not os.path.exists(path):
-            if not os.path.exists(storage_dir_for_id(id)):
-                os.makedirs(storage_dir_for_id(id))
+            os.makedirs(storage_dir_for_id(id), exist_ok=True)
             client = Minio(os.environ.get("MINIO_HOST"), "minioadmin", "minioadmin", secure=False)
             if not client.bucket_exists("ifc-pipeline"):
                 client.make_bucket("ifc-pipeline")
-            # print("ensure_file", id, ext)
             try:
                 client.fget_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
             except: pass
     return path        
             
-def store_file(id, ext):
+def store_file(id, *, extension=None, filename=None):
     if os.environ.get("MINIO_HOST"):
-        path = storage_file_for_id(id, ext)
+        if extension:
+            path = storage_file_for_id(id, extension)
+        elif filename:
+            path = os.path.join(storage_dir_for_id(id), filename)
         client = Minio(os.environ.get("MINIO_HOST"), "minioadmin", "minioadmin", secure=False)
         if not client.bucket_exists("ifc-pipeline"):
             client.make_bucket("ifc-pipeline")
-        client.fput_object("ifc-pipeline", id.split("_")[0] + "/" + id + "." + ext, path)
-        # print("store", id, ext)
+        client.fput_object("ifc-pipeline", id + "/" + (filename or (id + "." + extension)), path)
     else:
-        # print("not storing", id, ext)
         pass
 
             

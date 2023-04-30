@@ -22,31 +22,91 @@
 #                                                                                #
 ##################################################################################
 
+import datetime
 import os
+from pathlib import Path
 import sys
 import json
 import glob
+import threading
 import time
 import platform
 import traceback
 import importlib
 import subprocess
-import tempfile
 import operator
 import shutil
 import functools
 
 from collections import defaultdict
+import psutil
 
 import requests
+
+orig_print = print
+def print(*args, **kwargs):
+    current_time_s = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    orig_print(f"[{current_time_s}]", *args, **kwargs)
+
+
+def queue_task(func):
+    @functools.wraps(func)
+    def wrapper(id, *args, **kwargs):
+        txt = utils.storage_file_for_id(id, 'job.txt')
+        os.makedirs(os.path.dirname(txt), exist_ok=True)
+        with open(txt, 'w') as f:
+            sys.stdout = f
+            exc = None
+            try:
+                result = func(id, *args, **kwargs)
+            except Exception as e:
+                exc = e
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout = sys.__stdout__
+            utils.store_file(id, extension='job.txt')
+            
+            if exc:
+                traceback.print_exc(file=sys.stdout)
+                set_progress(id, -2)
+                if (a := getattr(exc, 'args')) and a and (s := a[0]) and isinstance(s, str):
+                    set_error(id, s)
+                else:
+                    set_error(id, 'unhandled exception')
+
+                raise exc
+            else:
+                return result
+
+    wrapper.original = func
+    wrapper.original.__qualname__ += ".original"
+
+    return wrapper
+
+
+def run(*args, **kwargs):
+    print("Executing", *args)
+    for k, v in kwargs:
+        print(f"With {k} = {v}")
+    for ln in subprocess.run(args, capture_output=True, universal_newlines=True, check=True).stdout.split("\n"):
+        print(ln)
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
 exe_path = os.path.join(os.path.dirname(__file__), "win" if on_windows else "nix")
+
 IFCCONVERT = os.path.join(exe_path, "IfcConvert") + ext
 if not os.path.exists(IFCCONVERT):
-    IFCCONVERT = "IfcConvert"
+    IFCCONVERT = shutil.which("IfcConvert")
 
+if VOXEC := os.environ.get("VOXEC_EXE"):
+    pass
+else:
+    VOXEC = os.path.join(exe_path, "voxec") + ext
+    if not os.path.exists(VOXEC):
+        VOXEC = shutil.which("voxec")
+
+assert VOXEC
+assert IFCCONVERT
 
 import utils
 import database
@@ -59,6 +119,17 @@ def set_progress(id, progress):
 
     model = session.query(database.model).filter(database.model.code == id).all()[0]
     model.progress = int(progress)
+    session.commit()
+    session.close()
+
+
+def set_error(id, error):
+    session = database.Session()
+   
+    id = id.split("_")[0]
+
+    model = session.query(database.model).filter(database.model.code == id).all()[0]
+    model.error = error
     session.commit()
     session.close()
 
@@ -82,18 +153,18 @@ class ifc_validation_task(task):
     est_time = 1
 
     def execute(self, directory, id):
-        ofn = os.path.join(directory, id + "_log.json")
+        ofn = os.path.join(directory, id + ".validate.log.json")
         with open(ofn, "w") as f:
             subprocess.call([sys.executable, "-m", "ifcopenshell.validate", utils.storage_file_for_id(id, "ifc"), "--json"], cwd=directory, stdout=f)
-        utils.store_file(id + "_log", "json")
+        utils.store_file(id, extension="validate.log.json")
 
 
 class xml_generation_task(task):
     est_time = 1
 
     def execute(self, directory, id):
-        subprocess.call([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".xml", "-yv"], cwd=directory)
-        utils.store_file(id, "xml")
+        subprocess.call([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".xml", "-yv"], cwd=directory, stdout=subprocess.PIPE)
+        utils.store_file(id, extension="xml")
 
 
 class geometry_generation_task(task):
@@ -101,7 +172,7 @@ class geometry_generation_task(task):
 
     def execute(self, directory, id):
         # @todo store this log in a separate file?
-        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", id + "_log.json"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", id + ".geometry.log.json"], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -117,8 +188,8 @@ class geometry_generation_task(task):
         if proc.poll() != 0:
             raise RuntimeError()
             
-        utils.store_file(id, "glb")
-        utils.store_file(id + "_log", "json")
+        utils.store_file(id, extension="glb")
+        utils.store_file(id, extension="geometry.log.json")
 
                 
 class glb_optimize_task(task):
@@ -132,8 +203,8 @@ class glb_optimize_task(task):
         except FileNotFoundError as e:
             pass
             
-        utils.store_file(id, "glb")
-        utils.store_file(id, "unoptimized.glb")
+        utils.store_file(id, extension="glb")
+        utils.store_file(id, extension="unoptimized.glb")
 
 
 class gzip_task(task):
@@ -149,7 +220,7 @@ class gzip_task(task):
                     with gzip.open(fn + ".gz", 'wb') as zipped_file:
                         zipped_file.writelines(orig_file)
                         
-                utils.store_file(id, ext + ".gz")
+                utils.store_file(id, extension=ext + ".gz")
                         
                         
 class svg_rename_task(task):
@@ -171,7 +242,7 @@ class svg_rename_task(task):
             if not os.path.exists(svg2_fn) or os.path.getsize(svg1_fn) > os.path.getsize(svg2_fn):
                 shutil.copyfile(svg1_fn, svg2_fn)
                 
-        utils.store_file(id.split("_")[0], "svg")
+        utils.store_file(id.split("_")[0], extension="svg")
 
 
 class svg_generation_task(task):
@@ -190,7 +261,17 @@ class svg_generation_task(task):
                 i += 1
                 self.sub_progress(i)
                 
-        utils.store_file(id, "svg")
+        utils.store_file(id, extension="svg")
+
+
+def escape_string(s):
+    """
+    Escapes the characters "\", "'", and '"' in a string by adding a backslash before them.
+    """
+    escape_chars = ['\\', '\'', '\"']
+    for char in escape_chars:
+        s = s.replace(char, '\\' + char)
+    return s
 
 
 def do_process(id, translation=None):
@@ -207,7 +288,7 @@ import ifcopenshell
 f = ifcopenshell.open('%(fn)s')
 negate = lambda x: -x
 print(*map(negate, f.by_type("IfcSite")[0].ObjectPlacement.RelativePlacement.Location.Coordinates))
-""" % {'fn': input_files[0]}).encode('ascii'))
+""" % {'fn': escape_string(input_files[0])}).encode('ascii'))
             translation = dict(zip("xyz", map(float, stdo.decode('ascii').split(' '))))
             print("Translation auto =", *translation.items())
             
@@ -219,17 +300,19 @@ print(*map(negate, f.by_type("IfcSite")[0].ObjectPlacement.RelativePlacement.Loc
             proc.communicate(input=("""
 import ifcopenshell
 f = ifcopenshell.open('%(fn)s.old')
-s = f.by_type('IfcSite')[0]
-lp = f.createIfcLocalPlacement(
-    RelativePlacement = f.createIfcAxis2Placement3D(
-        Location=f.createIfcCartesianPoint((%(x)f, %(y)f, %(z)f))
+sites = f.by_type('IfcSite')
+if len(sites) == 1:
+    lp = f.createIfcLocalPlacement(
+        RelativePlacement = f.createIfcAxis2Placement3D(
+            Location=f.createIfcCartesianPoint((%(x)f, %(y)f, %(z)f))
+        )
     )
-)
-s.ObjectPlacement.PlacementRelTo = lp
-# s.ObjectPlacement = lp
+    sites[0].ObjectPlacement.PlacementRelTo = lp
+else:
+    pass
 f.write('%(fn)s')
-""" % {'fn':f, **translation}).encode('ascii'))
-            utils.store_file(id, "ifc")            
+""" % {'fn':escape_string(f), **translation}).encode('ascii'))
+            utils.store_file(id, extension="ifc")            
     
     d = utils.storage_dir_for_id(id, output=True)
     if not os.path.exists(d):
@@ -314,28 +397,24 @@ f.write('%(fn)s')
     set_progress(id, elapsed)
 
 
+@queue_task
 def process(id, callback_url, translation=None, **kwargs):
-    try:
-        do_process(id, translation=translation)
-        status = "success"
-    except Exception as e:
-        traceback.print_exc(file=sys.stdout)
-        status = "failure"    
-        set_progress(id, -2)
-
-    if callback_url is not None:       
-        r = requests.post(callback_url, data={"status": status, "id": id})
+    do_process(id, translation=translation)
 
 
 def assert_ifc_type(fn, ifc_type):
     proc = subprocess.Popen([
         sys.executable,
-    ], stdin=subprocess.PIPE)
-    proc.communicate(input=("""
+    ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = proc.communicate(input=("""
 import ifcopenshell
 f = ifcopenshell.open('%s')
-exit(1 if len(f.by_type('%s')) == 0 else 0)
-""" % (fn, ifc_type)).encode('ascii'))
+exit(2 if len(f.by_type('%s')) == 0 else 0)
+""" % (escape_string(fn), ifc_type)).encode('ascii'))
+    for ln in (out+err).decode('utf-8').split('\n'):
+        print(ln)
+    if proc.returncode == 1:
+        raise RuntimeError(f"Checking for existance on {ifc_type} on {fn} failed")
     return proc.returncode == 0
 
 
@@ -347,169 +426,27 @@ def empty_result(d, id, data=None):
             'id': id,
             'results': []
         }, f)
-    utils.store_file(id, "json")
+    utils.store_file(id, extension="json")
     set_progress(id, 100)
 
 
-def escape_routes_old(id, config, **kwargs):
-
-        d = utils.storage_dir_for_id(id, output=True)
-        os.makedirs(d)
-
-        if kwargs.get('development'):
-            VOXEL_HOST = "http://localhost:5555"
-        else:
-            VOXEL_HOST = "http://voxel:5000" 
-            
-        ESCAPE_ROUTE_LENGTH = 8.0
-        
-        files = [utils.ensure_file(f, "ifc") for f in config['ids']]
-        files = [('ifc', (fn, open(fn))) for fn in files]
-
-        command = """file = parse("*.ifc")
-surfaces = create_geometry(file)
-voxels = voxelize(surfaces, VOXELSIZE=0.05)
-external = exterior(voxels)
-shell = offset(external)
-shell_inner_outer = offset(shell)
-three_layers = union(shell, shell_inner_outer)
-x = json_stats("vars.json")
-xx = mesh(three_layers, "interior.obj")
-"""
-        
-        command = """file = parse("*.ifc")
-fire_door_filter = filter_attributes(file, OverallWidth=">1.2")
-surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
-slabs = create_geometry(file, include={"IfcSlab"})
-doors = create_geometry(file, include={"IfcDoor"})
-fire_doors = create_geometry(fire_door_filter, include={"IfcDoor"})
-surface_voxels = voxelize(surfaces)
-slab_voxels = voxelize(slabs)
-door_voxels = voxelize(doors)
-fire_door_voxels = voxelize(fire_doors)
-walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
-walkable_minus = subtract(walkable, slab_voxels)
-walkable_seed = intersect(door_voxels, walkable_minus)
-surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
-surfaces_padded = offset_xy(surface_voxels, 0.1)
-surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
-walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
-walkable_seed_real = subtract(walkable_seed, surfaces_padded)
-reachable = traverse(walkable_region, walkable_seed_real)
-reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
-reachable_bottom = subtract(reachable, reachable_shifted)
+@queue_task
+def calculate_volume(id, config, **kwargs):
+    
+    def make_script(args):
+        return """file = parse("*.ifc")
 all_surfaces = create_geometry(file)
 voxels = voxelize(all_surfaces)
 external = exterior(voxels)
-walkable_region_offset = offset_xy(walkable_region, 1)
-walkable_region_incl = union(walkable_region, walkable_region_offset)
-seed_external = intersect(walkable_region_incl, external)
-seed_fire_doors = intersect(walkable_region_incl, fire_door_voxels)
-seed = union(seed_external, seed_fire_doors)
-safe = traverse(walkable_region_incl, seed, %(ESCAPE_ROUTE_LENGTH)f, connectedness=26)
-safe_bottom = intersect(safe, reachable_bottom)
-unsafe = subtract(reachable_bottom, safe)
-safe_interior = subtract(safe_bottom, external)
-x = mesh(unsafe, "unsafe.obj")
-x = mesh(safe_interior, "safe.obj")
-""" % locals()
-
-        values = {'voxelfile': command}
-        try:
-
-            objfn_0 = os.path.join(d, id + "_0.obj")
-            objfn_1 = os.path.join(d, id + "_1.obj")
-            objfn_0_s = os.path.join(d, id + "_0_s.obj")
-            objfn_1_s = os.path.join(d, id + "_1_s.obj")
-            mtlfn = objfn_0[:-5] + '0.mtl'
-            daefn = objfn_0[:-5] + '0.dae'
-            glbfn = daefn[:-4] + '.glb'
-
-            r = requests.post("%s/run" % VOXEL_HOST, files=files, data=values, headers={'accept':'application/json'})
-            vid = json.loads(r.text)['id']
-            
-            # @todo store in db
-            with open(os.path.join(d, "vid"), "w") as vidf:
-                vidf.write(vid)
-            
-            while True:
-                r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
-                progress = r.json()
-                set_progress(id, progress)
-                
-                msgs = []
-                try:
-                    r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
-                    msgs = r.json()
-                    json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
-                    utils.store_file(id + "_log", "json")
-                except: pass
-                
-                if len(msgs):
-                    if msgs[-1].get('message', '').startswith("script finished"):
-                        break
-                    elif msgs[-1].get('severity') == 'fatal':
-                        raise RuntimeError()
-                
-                time.sleep(1.)
-            
-            with open(mtlfn, 'w') as f:
-                f.write("newmtl red\n")
-                f.write("Kd 1.0 0.0 0.0\n\n")
-                f.write("newmtl green\n")
-                f.write("Kd 0.0 1.0 0.0\n\n")
-                
-            """
-            r = requests.get("%s/run/%s/interior.obj" % (VOXEL_HOST, vid))
-            r.raise_for_status()
-            with open(objfn_0, 'w') as f:
-                f.write('mtllib 0.mtl\n')
-                f.write('usemtl red\n')
-                f.write(r.text) 
-            """            
-
-            r = requests.get("%s/run/%s/unsafe.obj" % (VOXEL_HOST, vid))
-            r.raise_for_status()
-            with open(objfn_0, 'w') as f:
-                f.write('mtllib %s_0.mtl\n' % id)
-                f.write('usemtl red\n')
-                f.write(r.text)
-                
-            r = requests.get("%s/run/%s/safe.obj" % (VOXEL_HOST, vid))
-            r.raise_for_status()
-            with open(objfn_1, 'w') as f:
-                f.write('mtllib %s_0.mtl\n' % id)
-                f.write('usemtl green\n')
-                f.write(r.text)
-            
-            for fn in (objfn_0, objfn_1):
-                subprocess.check_call([sys.executable, "simplify_obj.py", fn, fn[:-4] + "_s.obj"])
-
-            subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", objfn_0_s, objfn_1_s, daefn])
-            
-            subprocess.check_call(["COLLADA2GLTF-bin", "-i", daefn, "-o", glbfn, "-b", "1"])
-            
-            utils.store_file(id + "_0", "glb")
-            
-        except:
-            traceback.print_exc()
-            set_progress(id, -2)
-
-
-
-def calculate_volume(id, config, **kwargs):
-
-        d = utils.storage_dir_for_id(id, output=True)
-        os.makedirs(d)
-
-        if kwargs.get('development'):
-            VOXEL_HOST = "http://localhost:5555"
-        else:
-            VOXEL_HOST = "http://voxel:5000" 
-            
-        files = [utils.ensure_file(f, "ifc") for f in config['ids']]
-        files = [('ifc', (fn, open(fn))) for fn in files]
-        
+internal = invert(external)
+plane_surf = plane(internal, 0.0, 0.0, 1.0, %f)
+plane_voxels = voxelize(plane_surf)
+two_components = subtract(internal, plane_voxels)
+x = describe_components("components.json", two_components)
+y = json_stats("internal.json", {"internal"})
+""" % args['plane_z']
+    
+    def prepare(files):
         plane_z = 0.0
         
         if len(files) == 1:
@@ -523,95 +460,56 @@ f = ifcopenshell.open('%s')
 lu = get_unit(f, "LENGTHUNIT", 1.0)
 s = f.by_type('IfcSite')[0]
 if s.ObjectPlacement and s.ObjectPlacement.PlacementRelTo:
-    print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu)
-""" % files[0][1][0]).encode('ascii'))
+print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu)
+""" % escape_string(files[0][1][0])).encode('ascii'))
             r = stdout.strip()
             if r:
                 plane_z = -float(r)
                 print("Using plane 0.0 0.0 1.0", plane_z)
-
+        return {
+            'plane_z': plane_z
+        }
         
-        command = """file = parse("*.ifc")
-all_surfaces = create_geometry(file)
-voxels = voxelize(all_surfaces)
-external = exterior(voxels)
-internal = invert(external)
-plane_surf = plane(internal, 0.0, 0.0, 1.0, %f)
-plane_voxels = voxelize(plane_surf)
-two_components = subtract(internal, plane_voxels)
-x = describe_components("components.json", two_components)
-y = json_stats("internal.json", {"internal"})
-""" % plane_z
+    def process(args, context : voxel_execution_context):           
+        components = context.get_json("components.json")
+        
+        parse_bounds = lambda d: [tuple(map(float, s[1:-1].split(', '))) for s in d.get('world').split(' - ')]
+        get_z_min = lambda d: parse_bounds(d)[0][2]
+        to_volume = lambda c: c * context.voxel_size**3
+        
+        counts = list(map(to_volume, map(float, map(operator.itemgetter('count'), sorted(components, key=get_z_min)))))
+        
+        if len(counts) == 2:
+            under, above = counts
+        else:
+            under = 0.
+            above = sum(counts)
+        
+        with open(os.path.join(d, id + ".json"), 'w') as f:
+            json.dump({
+                'under_ground': under,
+                'above_ground': above
+            }, f)
+            
+        utils.store_file(id, extension="json")
 
-        values = {'voxelfile': command}
-        try:
-            r = requests.post("%s/run" % VOXEL_HOST, files=files, data=values, headers={'accept':'application/json'})
-            vid = json.loads(r.text)['id']
-            
-            # @todo store in db
-            with open(os.path.join(d, "vid"), "w") as vidf:
-                vidf.write(vid)
-            
-            while True:
-                r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
-                progress = r.json()
-                set_progress(id, progress)
-                
-                msgs = []
-                try:
-                    r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
-                    msgs = r.json()
-                    json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
-                    utils.store_file(id + "_log", "json")
-                except: pass
-                
-                if len(msgs):
-                    if msgs[-1].get('message', '').startswith("script finished"):
-                        break
-                    elif msgs[-1].get('severity') == 'fatal':
-                        raise RuntimeError()
-                
-                time.sleep(1.)
-
-            r = requests.get("%s/run/%s/components.json" % (VOXEL_HOST, vid))
-            r.raise_for_status()
-            components = json.loads(r.text)
-            
-            # @todo
-            # r = requests.get("%s/run/%s/internal.json" % (VOXEL_HOST, vid))
-            # r.raise_for_status()
-            
-            parse_bounds = lambda d: [tuple(map(float, s[1:-1].split(', '))) for s in d.get('world').split(' - ')]
-            get_z_min = lambda d: parse_bounds(d)[0][2]
-            to_volume = lambda c: c * 0.05**3
-            
-            counts = list(map(to_volume, map(float, map(operator.itemgetter('count'), sorted(components, key=get_z_min)))))
-            
-            if len(counts) == 2:
-                under, above = counts
-            else:
-                under = 0.
-                above = sum(counts)
-            
-            with open(os.path.join(d, id + ".json"), 'w') as f:
-                json.dump({
-                    'under_ground': under,
-                    'above_ground': above
-                }, f)
-                
-            utils.store_file(id, "json")
-            
-        except:
-            traceback.print_exc()
-            set_progress(id, -2)
-            
+    process_voxel_check(
+        make_script,
+        process,
+        {},
+        id,
+        prepare=prepare
+    )
 
 def make_script_3_4(args):
     basis = """file = parse("*.ifc")
-all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 voxels = voxelize(all_surfaces)
 spaces = create_geometry(file, include={"IfcSpace"})
-space_ids = voxelize(spaces, type="uint", method="volume")
+space_ids_unaligned = voxelize(spaces, type="uint", method="volume")
+space_ids_empty = constant_like(voxels, 0, type="uint")
+space_ids = union(space_ids_unaligned, space_ids_empty)
+free(space_ids_unaligned)
 space_voxels = copy(space_ids, type="bit")
 headroom = subtract(space_voxels, voxels)
 headroom_height = collapse_count(headroom, 0, 0, -1)
@@ -621,13 +519,19 @@ space_footprint_thick = union(space_footprint, space_footprint_offset)
 space_footprint_thick_offset = offset(space_footprint_thick)
 space_footprint_thicker = union(space_footprint_thick, space_footprint_thick_offset)
 headroom_height_footprint = intersect(headroom_height, space_footprint_thicker)
+free(headroom_height)
+free(space_footprint_thicker)
+free(space_footprint_thick_offset)
+free(space_footprint_thick)
+free(space_footprint)
+free(space_footprint_offset)
 """
     
     threshold = """headroom_height_footprint_%(n)d = greater_than(headroom_height_footprint, %(n)d)
 x = describe_group_by("data_%(n)d.json", headroom_height_footprint_%(n)d, space_ids)
 """
     
-    return ''.join((basis,) + tuple(threshold % {'n': t / 0.10} for t in args.get('thresholds', [])))
+    return ''.join((basis,) + tuple(threshold % {'n': t / 0.05} for t in args.get('thresholds', [])))
 
 
 def process_3_4(args, context):
@@ -646,13 +550,15 @@ def process_3_4(args, context):
     # out we can put zero in the list.
     
     for t in args.get('thresholds', []):
-        n = t / 0.10
+        n = t / context.voxel_size
         for di in context.get_json("data_%(n)d.json" % locals()):
             sid = int(di.get('id'))
             sgd = space_guid_mapping.get(sid)
             if sgd is None: continue
             # @todo ^ this appears to be only for 0
-            d[sgd].append(float(di.get('count')) * 0.05 ** 2)
+            # @note empiric value for getting results closer to geometric surface area
+            # @todo don't do simple counts, but proper half counting for boundaries
+            d[sgd].append((float(di.get('count')) * context.voxel_size ** 2) / 0.95)
     
     context.put_json(context.id + '.json', {
         'space_heights': d,
@@ -660,7 +566,7 @@ def process_3_4(args, context):
         'id': context.id
     })
     
-    utils.store_file(context.id, "json")
+    utils.store_file(context.id, extension="json")
     
 def make_script_3_26(entity, args):
     h = args['height']
@@ -759,7 +665,7 @@ def process_3_26(entity, args, context):
     
     min_height_component = {}
     for di in components:
-        min_height_component[int(di["id"])] = float(int(di["min_value"])) * 0.05
+        min_height_component[int(di["id"])] = float(int(di["min_value"])) * context.voxel_size
     
     with open(os.path.join(d, 'colours.mtl'), 'w') as f:
         f.write("newmtl red\n")
@@ -770,7 +676,7 @@ def process_3_26(entity, args, context):
     def simplify():
         for fn in glob.glob(os.path.join(d, "*.obj")):
             fn2 = fn[:-4] + "_s.obj"
-            subprocess.check_call([sys.executable, "simplify_obj.py", fn, fn2])
+            run(sys.executable, "simplify_obj.py", fn, fn2)
             
             with open(fn2, 'r+') as f:
                 ls = f.readlines()
@@ -787,7 +693,7 @@ def process_3_26(entity, args, context):
             yield fn2
         
     # split mesh into separate DAE files
-    subprocess.check_call(["blender", "-b", "-P", "convert.py", "--split", "--orient", "--", *simplify(), os.path.join(d, "%s.dae")])
+    run("blender", "-b", "-P", "convert.py", "--split", "--orient", "--", *simplify(), os.path.join(d, "%s.dae"))
     
     collected = []
     min_height_by_guid = {}
@@ -812,11 +718,10 @@ def process_3_26(entity, args, context):
             collected.append((gd, fns[0]))
         else:
             joined = os.path.join(d, "%03d.dae" % iii)
-            subprocess.check_call(["blender", "-b", "-P", "convert.py", "--", *fns, joined])
+            run("blender", "-b", "-P", "convert.py", "--", *fns, joined)
             collected.append((gd, joined))
 
-    
-            
+
     # check for red material name -> error
     # convert to glTF        
     def convert():
@@ -824,11 +729,11 @@ def process_3_26(entity, args, context):
             error = "red" in open(fn).read()
             id = int(os.path.basename(fn)[:-4])
             fn2 = "../" + context.id + "_%d" % i + ".glb"
-            subprocess.check_call(["COLLADA2GLTF-bin", "-i", fn, "-o", fn2, "-b", "1"], cwd=d)
-            utils.store_file(context.id + "_%d" % i, "glb")
+            run("COLLADA2GLTF-bin", "-i", fn, "-o", fn2, "-b", "1", cwd=d)
+            utils.store_file(context.id, filename=f"{context.id}_{i}.glb")
             yield i, error, gd
-    
-            
+
+
     # format result dict
     def create_issue(tup):
         i, is_error, g = tup
@@ -844,7 +749,7 @@ def process_3_26(entity, args, context):
         'results': list(map(create_issue, convert()))
     })
     
-    utils.store_file(context.id, "json")
+    utils.store_file(context.id, extension="json")
 
 
 def make_script_connectivity_graph(exclude_external, args):
@@ -916,49 +821,43 @@ mesh(cull_away_hi_res, "cull_away_hi_res.obj")
 def process_connectivity_graph(command, args, context):
     context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
     
-    subprocess.check_call([
+    run(
         sys.executable,
         os.path.abspath(os.path.join(os.path.dirname(__file__), 'connectivity_graph.py')),
         context.id,
         repr(context.files),
         command,
-        repr(args)
-    ], cwd=context.path)
+        repr(args),
+        cwd=context.path)
     
     # store json and gltfs
-    utils.store_file(context.id, "json")
+    utils.store_file(context.id, extension="json")
     for fn in glob.glob(os.path.join(context.path, "*.glb")):
-        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+        utils.store_file(context.id, filename=os.path.relpath(fn, context.path))
 
 
 def process_non_voxel_check(command, args, id, ids, **kwargs):
-
-    try:
-        set_progress(id, 0)
-        
-        files = [utils.ensure_file(f, "ifc") for f in ids]
-        
-        path = utils.storage_dir_for_id(id, output=True)
-        os.makedirs(path)
-
-        subprocess.check_call([
-            sys.executable,
-            os.path.abspath(os.path.join(os.path.dirname(__file__), command + '.py')),
-            id,
-            *map(str, args),
-            *files,
-        ], cwd=path)
-        
-        set_progress(id, 100)
-
-    except:
-        traceback.print_exc(file=sys.stdout)
-        set_progress(id, -2)
+    set_progress(id, 0)
     
+    files = [utils.ensure_file(f, "ifc") for f in ids]
+    
+    path = utils.storage_dir_for_id(id, output=True)
+    os.makedirs(path)
+
+    run(
+        sys.executable,
+        os.path.abspath(os.path.join(os.path.dirname(__file__), command + '.py')),
+        id,
+        *map(str, args),
+        *files,
+        cwd=path)
+    
+    set_progress(id, 100)
+
     # store json and gltfs
-    utils.store_file(id, "json")
+    utils.store_file(id, extension="json")
     for fn in glob.glob(os.path.join(path, "*.glb")):
-        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+        utils.store_file(id, filename=os.path.relpath(fn, path))
 
 
 
@@ -1002,54 +901,133 @@ mesh(result, "result.obj")
 def process_safety_barriers(element_type, args, context):
     context.get_file('result.obj', target=os.path.join(context.path, 'result.obj'))
 
-    subprocess.check_call([
+    run(
         sys.executable,
         "simplify_obj.py",
         os.path.join(context.path, 'result.obj'),
         os.path.join(context.path, 'simplified.obj')
-    ])
+    )
     
-    subprocess.check_call([
+    run(
         sys.executable,
         os.path.abspath(os.path.join(os.path.dirname(__file__), 'annotate_safety_barriers.py')),
         context.id,
         repr(context.files),
-        element_type
-    ], cwd=context.path)
+        element_type,
+        cwd=context.path)
     
     # store json and gltfs
-    utils.store_file(context.id, "json")
+    utils.store_file(context.id, extension="json")
     for fn in glob.glob(os.path.join(context.path, "*.glb")):
-        utils.store_file(os.path.basename(fn).split(".")[0], "glb")
+        utils.store_file(id, filename=os.path.relpath(fn, context.path))
 
     
 class voxel_execution_context:
-    def __init__(self, id, vid, files,  **kwargs):
-    
+    def __init__(self, id, files, command):
         self.id = id
-        self.vid = vid
         self.files = files
-        self.path = utils.storage_dir_for_id(id, output=True)
+        self.task_path = Path(utils.storage_dir_for_id(id, output=True))
+        self.path = self.task_path / "voxel"
+        self.path.mkdir()
+        for fn in self.files:
+            os.link(fn, str(self.path / os.path.basename(fn)))
+        with (self.path / "voxelfile.txt").open('w') as f:
+            f.write(command)
+
+    def get_progress(self):
+        try:
+            p = (self.path / "progress").stat().st_size
+        except: p = 0
+        return p
     
-        if kwargs.get('development'):
-            self.host = "http://localhost:5555"
+    def get_log(self):
+        lines = []
+        try:
+            with (self.path / "log.json").open() as f:
+                for l in f:
+                    try: lines.append(json.loads(l))
+                    except Exception as e: print(e)
+        except Exception as e: print(e)
+        return lines
+
+    def run(self, **args):
+        self.voxel_size = args['size']
+    
+        def make_args(d):
+            for kv in d.items():
+                if kv[1] is True:
+                    yield "--%s" % kv[0]
+                else:
+                    yield "--%s=%s" % kv
+    
+        def inner():
+            f = (self.path / "progress").open("wb")
+            print(*[VOXEC, "voxelfile.txt", "-q", "--log-file", "log.json", *make_args(args or {})])
+            process = subprocess.Popen(
+                [VOXEC, "voxelfile.txt", "-q", "--log-file", "log.json", *make_args(args or {})],
+                cwd=self.path,
+                stdout = f
+            )
+
+            if rlim_s := os.environ.get('VOXEC_RLIMIT_AS_MB'):
+                pid = process.pid
+                rl = int(rlim_s) * 1024 * 1024
+                psutil.Process(pid).rlimit(psutil.RLIMIT_AS, (rl, rl))
+
+            self.returncode = process.wait()
+            
+        thread = threading.Thread(target=inner)
+        thread.start()
+        while thread.is_alive():
+            progress = self.get_progress() / 100. * 95.
+            set_progress(self.id, progress)
+            
+            try:
+                utils.store_file(self.id, filename="voxel/log.json")
+            except: pass
+            
+            time.sleep(1.)
+
+        def wrap_try(fn, default=None):
+            def inner(*args):
+                try:
+                    return fn(*args)
+                except:
+                    return default
+            return inner
+            
+        if self.returncode in (-6, -9):
+            raise RuntimeError(f'insufficient resources')
+
+        msgs = []
+        try:
+            msgs = list(filter(None, map(wrap_try(json.loads), list(open(os.path.join(utils.storage_dir_for_id(self.id), "voxel/log.json"))))))
+        except: pass
+        if msgs:
+            if msgs[-1].get('severity') == 'fatal':
+                # @todo add some assertions to script
+                s = msgs[-1].get('error', {}).get('message')
+                if not s:
+                    s = msgs[-1]['message']
+                raise RuntimeError(s)
+            elif not msgs[-1].get('message', '').startswith("script finished"):
+                raise RuntimeError(f'exit code {self.returncode}')
         else:
-            self.host = "http://voxel:5000"
-        
+            raise RuntimeError(f'empty output exit code {self.returncode}')
+
     def get_file(self, path, target=None):
-        r = requests.get("%s/run/%s/%s" % (self.host, self.vid, path))
-        r.raise_for_status()
+        s = (self.path / path).open('rb').read()
         if target:
             with open(target, 'wb') as f:
-                f.write(r.content)
+                f.write(s)
         else:
-            return r
+            return s
         
     def get_json(self, path):
-        return self.get_file(path).json()
+        return json.loads(self.get_file(path))
     
     def put_json(self, path, obj):
-        with open(os.path.join(self.path, path), 'w') as f:
+        with (self.task_path / path).open('w') as f:
             json.dump(obj, f)
     
 
@@ -1058,69 +1036,34 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
     from multiprocessing import cpu_count
 
     d = utils.storage_dir_for_id(id, output=True)
-    os.makedirs(d)
+    os.makedirs(d, exist_ok=True)
 
-    if kwargs.get('development'):
-        VOXEL_HOST = "http://localhost:5555"
-    else:
-        VOXEL_HOST = "http://voxel:5000" 
-        
     files = [utils.ensure_file(f, "ifc") for f in files]
-    file_objs = [('ifc', (fn, open(fn))) for fn in files]
     
+    if p_fn := kwargs.get('prepare'):
+        args.update(p_fn(files))
+
     command = script_fn(args)
     values = {
-        'voxelfile': command,
         'threads': cpu_count() // int(os.environ.get('NUM_WORKERS', '1')),
         'chunk': 16,
         'size': kwargs.get('size', 0.05)
     }
     
-    try:
-        r = requests.post("%s/run" % VOXEL_HOST, files=file_objs, data=values, headers={'accept': 'application/json'})
-        vid = json.loads(r.text)['id']
-        
-        context = voxel_execution_context(id, vid, files, **kwargs)
-        
-        # @todo store in db
-        with open(os.path.join(d, "vid"), "w") as vidf:
-            vidf.write(vid)
-        
-        while True:
-            r = requests.get("%s/progress/%s" % (VOXEL_HOST, vid))
-            progress = int(r.json() / 100. * 95.)
-            set_progress(id, progress)
-            
-            msgs = []
-            try:
-                r = requests.get("%s/log/%s" % (VOXEL_HOST, vid))
-                msgs = r.json()
-                json.dump(msgs, open(os.path.join(d, id + "_log.json"), "w"))
-                utils.store_file(id + "_log", "json")
-            except: pass
-            
-            if len(msgs):
-                if msgs[-1].get('message', '').startswith("script finished"):
-                    break
-                elif msgs[-1].get('severity') == 'fatal':
-                    raise RuntimeError()
-            
-            time.sleep(1.)
-            
-        process_fn(args, context)
-        
-        set_progress(id, 100)
-        
-    except:
-        traceback.print_exc(file=sys.stdout)
-        set_progress(id, -2)
+    context = voxel_execution_context(id, files, command)
+    context.run(**values)
+    process_fn(args, context)
+    
+    set_progress(id, 100)
         
         
 def abort(id):
     print("Invalid arguments")
     set_progress(id, -2)
+    set_error("Invalid arguments")
 
 
+@queue_task
 def space_heights(id, config, **kwargs):
     thresholds = config.get(
         'thresholds',
@@ -1149,9 +1092,10 @@ def space_heights(id, config, **kwargs):
         {'thresholds': thresholds},
         id,
         config['ids'],
-        size=0.10,
+        # size=0.10,
         **kwargs)
 
+@queue_task
 def stair_headroom(id, config, **kwargs):
     height = config.get('height', 2.2)
     
@@ -1169,6 +1113,7 @@ def stair_headroom(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def ramp_headroom(id, config, **kwargs):
     height = config.get('height', 2.2)
     
@@ -1183,7 +1128,6 @@ def ramp_headroom(id, config, **kwargs):
     if not any(map(functools.partial(assert_ifc_type, ifc_type="IfcRamp"), files)):
         return empty_result(d, id)
 
-        
     process_voxel_check(
         functools.partial(make_script_3_26, "IfcRamp"),
         functools.partial(process_3_26, "IfcRamp"),
@@ -1193,6 +1137,7 @@ def ramp_headroom(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def door_direction(id, config, **kwargs):
 
     files = [utils.ensure_file(f, "ifc") for f in config['ids']]
@@ -1210,6 +1155,7 @@ def door_direction(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def landings(id, config, **kwargs):
     length = config.get('length', 1.5)
 
@@ -1228,6 +1174,7 @@ def landings(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def risers(id, config, **kwargs):
     process_voxel_check(
         functools.partial(make_script_connectivity_graph, "include_external"),
@@ -1237,7 +1184,7 @@ def risers(id, config, **kwargs):
         config['ids'],
         **kwargs)
 
-
+@queue_task
 def escape_routes(id, config, **kwargs):
     lengths = config.get('lengths', [30., 30.])
     objects = config.get('objects', None)
@@ -1264,6 +1211,7 @@ def escape_routes(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def safety_barriers(id, config, **kwargs):
     element = config.get('element', 'IfcStair')
     
@@ -1279,6 +1227,7 @@ def safety_barriers(id, config, **kwargs):
         **kwargs)
 
 
+@queue_task
 def entrance_area(id, config, **kwargs):
     width = config.get('width', 1.5)
     depth = config.get('depth', 1.5)
@@ -1298,6 +1247,7 @@ def entrance_area(id, config, **kwargs):
         **kwargs)
     
 
+@queue_task
 def ramp_percentage(id, config, **kwargs):
     warning = config.get('warning', 6)
     error = config.get('error', 10)
@@ -1314,4 +1264,3 @@ def ramp_percentage(id, config, **kwargs):
         id,
         config['ids'],
         **kwargs)
-

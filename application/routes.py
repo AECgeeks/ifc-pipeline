@@ -70,18 +70,18 @@ def get_file_progress(id):
         })
    
 @application.route("/run/<check>", methods=['POST'])
-def initiate_check_escape_routes(check):
+def initiate_check(check):
     if check not in {'escape_routes', 'calculate_volume', 'space_heights', 'stair_headroom', 'ramp_headroom', 'door_direction', 'landings', 'safety_barriers', 'entrance_area', 'ramp_percentage', 'risers'}:
         abort(404)
         
     id = utils.generate_id()
-    # d = utils.storage_dir_for_id(id, output=True)
-    # os.makedirs(d)
-    
+
     config = request.json
     
     session = database.Session()
-    session.add(database.model(id, ''))
+    m = database.model(id, check)
+    m.meta = json.dumps({'models': config.get('ids', [])})
+    session.add(m)
     session.commit()
     session.close()
     
@@ -111,21 +111,27 @@ def get_check_progress(id):
     fn3 = utils.storage_file_for_id(id, "done", output=True)
     
     if p == 100 and (os.path.exists(fn) or os.path.exists(fn2) or os.path.exists(fn3)):
-        return jsonify({
+        d = {
             "status": "done",
             "id": id
-        })
+        }
     elif p in (-1, -2):
-        return jsonify({
+        d = {
             "status": ["queued", "errored"][p == -2],
             "id": id
-        })
+        }
+        er = "UNKNOWN_ERROR"
+        if p == -2 and models[0].error:
+            er = models[0].error.upper().replace(" ", "_")
+        d["error"] = er
     else:
-        return jsonify({
+        d = {
             "status": "progress",
             "progress": p,
             "id": id
-        })
+        }
+    
+    return jsonify(d)
         
 @application.route("/run/<id>/log", methods=['GET'])
 def get_check_log(id):
