@@ -85,10 +85,11 @@ def queue_task(func):
 
 def run(*args, **kwargs):
     print("Executing", *args)
-    for k, v in kwargs:
+    for k, v in kwargs.items():
         print(f"With {k} = {v}")
-    for ln in subprocess.run(args, capture_output=True, universal_newlines=True, check=True).stdout.split("\n"):
+    for ln in subprocess.run(args, capture_output=True, universal_newlines=True, check=True, **kwargs).stdout.split("\n"):
         print(ln)
+
 
 on_windows = platform.system() == 'Windows'
 ext = ".exe" if on_windows else ""
@@ -107,6 +108,9 @@ else:
 
 assert VOXEC
 assert IFCCONVERT
+
+REPLACE_DETAILED_ELEMENTS = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'replace-detailed-elements.py')
+assert os.path.exists(REPLACE_DETAILED_ELEMENTS)
 
 import utils
 import database
@@ -172,7 +176,15 @@ class geometry_generation_task(task):
 
     def execute(self, directory, id):
         # @todo store this log in a separate file?
-        proc = subprocess.Popen([IFCCONVERT, utils.storage_file_for_id(id, "ifc"), id + ".glb", "-qyv", "--log-format", "json", "--log-file", id + ".geometry.log.json"], cwd=directory, stdout=subprocess.PIPE)
+        proc = subprocess.Popen([
+            IFCCONVERT,
+            utils.storage_file_for_id(id, "ifc"),
+            id + ".glb",
+            "-qyv",
+            "--log-format", "json",
+            "--log-file", id + ".geometry.log.json",
+            "--exclude", "entities", "IfcOpeningElement", "IfcSpace", "IfcFlowTerminal", "IfcDiscreteAccessory"
+        ], cwd=directory, stdout=subprocess.PIPE)
         i = 0
         while True:
             ch = proc.stdout.read(1)
@@ -264,6 +276,24 @@ class svg_generation_task(task):
         utils.store_file(id, extension="svg")
 
 
+class replace_detailed_elements_task(task):
+    est_time = 1
+
+    def execute(self, directory, id):
+        fn0 = utils.storage_file_for_id(id, 'ifc')
+        fn1 = utils.storage_file_for_id(id, 'tmp', ensure=False)
+        fn2 = utils.storage_file_for_id(id, 'before.replacement.ifc', ensure=False)
+        
+        if os.path.getsize(fn0) > 100 * 1024 * 1024:
+            run(sys.executable, REPLACE_DETAILED_ELEMENTS, fn0, fn1, cwd=directory)
+            
+            os.rename(fn0, fn2)
+            os.rename(fn1, fn0)
+
+            utils.store_file(id, extension="before.replacement.ifc")
+            utils.store_file(id, extension="ifc")
+
+
 def escape_string(s):
     """
     Escapes the characters "\", "'", and '"' in a string by adding a backslash before them.
@@ -320,6 +350,7 @@ f.write('%(fn)s')
 
     tasks = [
         # ifc_validation_task,
+        replace_detailed_elements_task,
         xml_generation_task,
         geometry_generation_task,
         # svg_generation_task,
@@ -435,7 +466,7 @@ def calculate_volume(id, config, **kwargs):
     
     def make_script(args):
         return """file = parse("*.ifc")
-all_surfaces = create_geometry(file)
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 voxels = voxelize(all_surfaces)
 external = exterior(voxels)
 internal = invert(external)
@@ -460,7 +491,7 @@ f = ifcopenshell.open('%s')
 lu = get_unit(f, "LENGTHUNIT", 1.0)
 s = f.by_type('IfcSite')[0]
 if s.ObjectPlacement and s.ObjectPlacement.PlacementRelTo:
-print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu)
+    print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2] * lu)
 """ % escape_string(files[0][1][0])).encode('ascii'))
             r = stdout.strip()
             if r:
@@ -485,7 +516,7 @@ print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2]
             under = 0.
             above = sum(counts)
         
-        with open(os.path.join(d, id + ".json"), 'w') as f:
+        with open(os.path.join(context.task_path, id + ".json"), 'w') as f:
             json.dump({
                 'under_ground': under,
                 'above_ground': above
@@ -498,6 +529,7 @@ print(s.ObjectPlacement.PlacementRelTo.RelativePlacement.Location.Coordinates[2]
         process,
         {},
         id,
+        config['ids'],
         prepare=prepare
     )
 
@@ -574,7 +606,7 @@ def make_script_3_26(entity, args):
     
     basis = """function get_reachability(file)
 
-    surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+    surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace", "IfcFlowTerminal", "IfcDiscreteAccessory"})
     surface_voxels = voxelize(surfaces)
 
     slabs = create_geometry(file, include={"IfcSlab"})
@@ -597,7 +629,7 @@ def make_script_3_26(entity, args):
 return reachable
 
 file = parse("*.ifc")
-all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement"})
+all_surfaces = create_geometry(file, exclude={"IfcSpace", "IfcOpeningElement", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 voxels = voxelize(all_surfaces)
 
 stairs = create_geometry(file, include={"%s"})
@@ -656,7 +688,7 @@ def process_3_26(entity, args, context):
                     stair_guid_mapping[ch.id()] = st.GlobalId
                     stair_to_children[st.GlobalId].append(ch.id())
     
-    d = os.path.join(context.path, 'tmp')
+    d = os.path.join(context.task_path, 'tmp')
     os.makedirs(d)
     
     context.get_file('valid.obj', target=os.path.join(d, 'valid.obj'))
@@ -754,12 +786,12 @@ def process_3_26(entity, args, context):
 
 def make_script_connectivity_graph(exclude_external, args):
     base = """file = parse("*.ifc")
-surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 slabs = create_geometry(file, include={"IfcSlab"})
 doors = create_geometry(file, include={"IfcDoor"})
 door_filter = filter_properties(file, IsExternal=1)
 external_doors = create_geometry(door_filter, include={"IfcDoor"})
-all_surfaces = create_geometry(file)
+all_surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcSpace", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 
 surface_voxels_region = voxelize(surfaces)
 slab_voxels_region = voxelize(slabs)
@@ -819,7 +851,7 @@ mesh(cull_away_hi_res, "cull_away_hi_res.obj")
     return base + (epilogue_2 if exclude_external == "exclude_external" else epilogue_1)
 
 def process_connectivity_graph(command, args, context):
-    context.get_file('flow.csv', target=os.path.join(context.path, 'flow.csv'))
+    context.get_file('flow.csv', target=os.path.join(context.task_path, 'flow.csv'))
     
     run(
         sys.executable,
@@ -828,12 +860,12 @@ def process_connectivity_graph(command, args, context):
         repr(context.files),
         command,
         repr(args),
-        cwd=context.path)
+        cwd=context.task_path)
     
     # store json and gltfs
     utils.store_file(context.id, extension="json")
-    for fn in glob.glob(os.path.join(context.path, "*.glb")):
-        utils.store_file(context.id, filename=os.path.relpath(fn, context.path))
+    for fn in glob.glob(os.path.join(context.task_path, "*.glb")):
+        utils.store_file(context.id, filename=os.path.relpath(fn, context.task_path))
 
 
 def process_non_voxel_check(command, args, id, ids, **kwargs):
@@ -842,7 +874,7 @@ def process_non_voxel_check(command, args, id, ids, **kwargs):
     files = [utils.ensure_file(f, "ifc") for f in ids]
     
     path = utils.storage_dir_for_id(id, output=True)
-    os.makedirs(path)
+    os.makedirs(path, exist_ok=True)
 
     run(
         sys.executable,
@@ -863,7 +895,7 @@ def process_non_voxel_check(command, args, id, ids, **kwargs):
 
 def make_script_safety_barriers(args):
     return """file = parse("*.ifc")
-surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace"})
+surfaces = create_geometry(file, exclude={"IfcOpeningElement", "IfcDoor", "IfcSpace", "IfcFlowTerminal", "IfcDiscreteAccessory"})
 slabs = create_geometry(file, include={"IfcSlab"})
 doors = create_geometry(file, include={"IfcDoor"})
 
@@ -899,13 +931,13 @@ mesh(result, "result.obj")
 
 
 def process_safety_barriers(element_type, args, context):
-    context.get_file('result.obj', target=os.path.join(context.path, 'result.obj'))
+    context.get_file('result.obj', target=os.path.join(context.task_path, 'result.obj'))
 
     run(
         sys.executable,
         "simplify_obj.py",
-        os.path.join(context.path, 'result.obj'),
-        os.path.join(context.path, 'simplified.obj')
+        os.path.join(context.task_path, 'result.obj'),
+        os.path.join(context.task_path, 'simplified.obj')
     )
     
     run(
@@ -914,12 +946,12 @@ def process_safety_barriers(element_type, args, context):
         context.id,
         repr(context.files),
         element_type,
-        cwd=context.path)
+        cwd=context.task_path)
     
     # store json and gltfs
     utils.store_file(context.id, extension="json")
-    for fn in glob.glob(os.path.join(context.path, "*.glb")):
-        utils.store_file(id, filename=os.path.relpath(fn, context.path))
+    for fn in glob.glob(os.path.join(context.task_path, "*.glb")):
+        utils.store_file(id, filename=os.path.relpath(fn, context.task_path))
 
     
 class voxel_execution_context:
@@ -962,9 +994,9 @@ class voxel_execution_context:
     
         def inner():
             f = (self.path / "progress").open("wb")
-            print(*[VOXEC, "voxelfile.txt", "-q", "--log-file", "log.json", *make_args(args or {})])
+            print(VOXEC, "voxelfile.txt", "-q", "--no-vox", "--log-file", "log.json", *make_args(args or {}))
             process = subprocess.Popen(
-                [VOXEC, "voxelfile.txt", "-q", "--log-file", "log.json", *make_args(args or {})],
+                [VOXEC, "voxelfile.txt", "-q", "--no-vox", "--log-file", "log.json", *make_args(args or {})],
                 cwd=self.path,
                 stdout = f
             )

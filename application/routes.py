@@ -85,7 +85,7 @@ def initiate_check(check):
     session.commit()
     session.close()
     
-    queue_task(check, id, config)
+    queue_task(check, id, config, depends=config.get('ids', []))
     return jsonify({
         "status": "ok",
         "id": id

@@ -39,6 +39,7 @@ RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-${IFOPSH_VERSIO
 RUN wget -O /tmp/ifcopenshell_python.zip https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-`python3 -c 'import sys;print("".join(map(str, sys.version_info[0:2])))'`-${IFOPSH_VERSION}-linux64.zip  && \
 	mkdir -p `python3 -c 'import site; print(site.getusersitepackages())'` && \
 	unzip -d `python3 -c 'import site; print(site.getusersitepackages())'` /tmp/ifcopenshell_python.zip && \
+	wget https://raw.githubusercontent.com/IfcOpenShell/IfcOpenShell/v0.7.0/src/ifcopenshell-python/ifcopenshell/geom/occ_utils.py -O `python3 -c 'import site; print(site.getusersitepackages())'`/ifcopenshell/geom/occ_utils.py && \
 	rm /tmp/ifcopenshell_python.zip
 
 # Voxec IfcOpenShell v0.7.0
