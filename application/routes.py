@@ -120,10 +120,11 @@ def get_check_progress(id):
             "status": ["queued", "errored"][p == -2],
             "id": id
         }
-        er = "UNKNOWN_ERROR"
-        if p == -2 and models[0].error:
-            er = models[0].error.upper().replace(" ", "_")
-        d["error"] = er
+        if p == -2:
+            er = "UNKNOWN_ERROR"
+            if p == -2 and models[0].error:
+                er = models[0].error.upper().replace(" ", "_")
+            d["error"] = er
     else:
         d = {
             "status": "progress",
