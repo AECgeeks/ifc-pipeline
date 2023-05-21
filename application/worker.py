@@ -802,6 +802,7 @@ slab_voxels_region = voxelize(slabs)
 door_voxels_region = voxelize(doors)
 voxels = voxelize(all_surfaces)
 external_door_voxels_thin = voxelize(external_doors)
+assert(external_door_voxels_thin)
 external_door_voxels_layer = offset(external_door_voxels_thin)
 external_door_voxels = union(external_door_voxels_thin, external_door_voxels_layer)
 
