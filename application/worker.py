@@ -560,7 +560,7 @@ free(space_footprint_offset)
 """
     
     threshold = """headroom_height_footprint_%(n)d = greater_than(headroom_height_footprint, %(n)d)
-x = describe_group_by("data_%(n)d.json", headroom_height_footprint_%(n)d, space_ids)
+x = describe_group_by("data_%(n)d.json", headroom_height_footprint_%(n)d, space_ids, only_counts=1)
 """
     
     return ''.join((basis,) + tuple(threshold % {'n': t / 0.05} for t in args.get('thresholds', [])))
