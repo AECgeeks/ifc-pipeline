@@ -910,8 +910,12 @@ elevator_shaft_voxels = voxelize(elevator_shaft)
 surface_voxels_excl = voxelize(surfaces)
 surface_voxels = union(surface_voxels_excl, elevator_shaft_voxels)
 
-slab_voxels = voxelize(slabs)
-door_voxels = voxelize(doors)
+slab_voxels_region = voxelize(slabs)
+door_voxels_region = voxelize(doors)
+
+empty = constant_like(surface_voxels, 0, type="bit")
+slab_voxels = union(empty, slab_voxels_region)
+door_voxels = union(empty, door_voxels_region)
 
 walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
 walkable_minus = subtract(walkable, slab_voxels)
