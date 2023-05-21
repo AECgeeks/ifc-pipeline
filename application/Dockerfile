@@ -28,7 +28,7 @@ RUN git clone --recursive https://github.com/KhronosGroup/COLLADA2GLTF && \
 	cd / && \
 	rm -rf COLLADA2GLTF
 
-ARG IFOPSH_VERSION=v0.7.0-4d4500f
+ARG IFOPSH_VERSION=v0.7.0-64d98f1
 
 # IfcConvert v0.7.0
 RUN wget https://s3.amazonaws.com/ifcopenshell-builds/IfcConvert-${IFOPSH_VERSION}-linux64.zip -O /tmp/IfcConvert.zip && \
