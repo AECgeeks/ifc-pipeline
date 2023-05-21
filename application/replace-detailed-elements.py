@@ -166,9 +166,9 @@ for prod in f.by_type('IfcDoor') + f.by_type('IfcWindow'):
         wall_shapes.append(ws)
     except:
         if wall.IsDecomposedBy:
-            for elem in wall.IsDecomposedBy.RelatedObjects:
-                ws = ifcopenshell.geom.create_shape(s, wall)
-                wall_shapes.append(ws)        
+            for elem in wall.IsDecomposedBy[0].RelatedObjects:
+                ws = ifcopenshell.geom.create_shape(s, elem)
+                wall_shapes.append(ws)
                 
     if not wall_shapes:
         print(f"No wall geom")
