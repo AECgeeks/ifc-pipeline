@@ -610,10 +610,14 @@ def make_script_3_26(entity, args):
     surface_voxels = voxelize(surfaces)
 
     slabs = create_geometry(file, include={"IfcSlab"})
-    slab_voxels = voxelize(slabs)
+    slab_voxels_region = voxelize(slabs)
 
     doors = create_geometry(file, include={"IfcDoor"})
-    door_voxels = voxelize(doors)
+    door_voxels_region = voxelize(doors)
+
+    empty = constant_like(surface_voxels, 0, type="bit")
+    slab_voxels = union(empty, slab_voxels_region)
+    door_voxels = union(empty, door_voxels_region)
 
     walkable = shift(slab_voxels, dx=0, dy=0, dz=1)
     walkable_minus = subtract(walkable, slab_voxels)
