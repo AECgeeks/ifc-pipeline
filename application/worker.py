@@ -1048,7 +1048,9 @@ class voxel_execution_context:
             if msgs[-1].get('severity') == 'fatal':
                 # @todo add some assertions to script
                 s = msgs[-1].get('error', {}).get('message')
-                if not s:
+                if s == "Failed assert" and len(msgs) >= 2 and msgs[-2].get('severity') == 'notice' and msgs[-2].get('message') == "executing {statement}" and msgs[-2].get('statement'):
+                    s += ": " + msgs[-2].get('statement', '')
+                elif not s:
                     s = msgs[-1]['message']
                 raise RuntimeError(s)
             elif not msgs[-1].get('message', '').startswith("script finished"):
