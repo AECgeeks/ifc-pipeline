@@ -1103,7 +1103,7 @@ def process_voxel_check(script_fn, process_fn, args, id, files, **kwargs):
 def abort(id):
     print("Invalid arguments")
     set_progress(id, -2)
-    set_error("Invalid arguments")
+    set_error(id, "Invalid arguments")
 
 
 @queue_task
