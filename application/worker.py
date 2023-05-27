@@ -627,7 +627,7 @@ def make_script_3_26(entity, args):
     surfaces_padded = offset_xy(surface_voxels, 0.1)
     surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
     walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
-    walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+    walkable_seed_real = subtract(walkable_seed, surfaces_obstacle)
     reachable = traverse(walkable_region, walkable_seed_real)
 
 return reachable
@@ -925,7 +925,7 @@ surfaces_sweep = sweep(surface_voxels, dx=0, dy=0, dz=0.5)
 surfaces_padded = offset_xy(surface_voxels, 0.1)
 surfaces_obstacle = sweep(surfaces_padded, dx=0, dy=0, dz=-0.5)
 walkable_region = subtract(surfaces_sweep, surfaces_obstacle)
-walkable_seed_real = subtract(walkable_seed, surfaces_padded)
+walkable_seed_real = subtract(walkable_seed, surfaces_obstacle)
 reachable = traverse(walkable_region, walkable_seed_real)
 reachable_shifted = shift(reachable, dx=0, dy=0, dz=1)
 reachable_bottom = subtract(reachable, reachable_shifted)
