@@ -85,8 +85,9 @@ services:
     depends_on:
       - frontend
     ports:
-      - "8080:80"
+      - "80:80"
     {% if with_https %}
+      - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./docker-volumes/certbot/conf:/etc/letsencrypt
