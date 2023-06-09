@@ -25,6 +25,10 @@ template = env.get_template('docker-compose-template.yml')
 
 if args.convert:
 
+    # curl -L https://github.com/kubernetes/kompose/releases/download/v1.28.0/kompose-linux-amd64 -o kompose
+    # chmod +x kompose
+    # mv kompose /usr/local/bin
+
     import os    
     import copy
     import glob
@@ -97,12 +101,17 @@ if args.convert:
                         
         volume_lists = [[d.get('volumes') for d in v.values()] for v in cfg.values() if isinstance(v, dict)][0]
 
-        cfg['volumes'] = {k:None for k in global_volume_names}
+        if global_volume_names:
+            cfg['volumes'] = {k:None for k in global_volume_names}
+        
+        for x in cfg['services'].values():
+            if 'volumes' in x and len(x['volumes']) == 0:
+                del x['volumes']
                     
         with open('docker-compose-%s.yml' % H, 'w') as f:
             dump(cfg, f, default_flow_style=False)
 
-        subprocess.call(['kompose', '-v', 'convert', '-c', "--file", "docker-compose-%s.yml" % H, "--volumes", H, "-o", H] + compose_args)
+        subprocess.check_call(['kompose', '-v', 'convert', '-c', "--file", "docker-compose-%s.yml" % H, "--volumes", H, "-o", H] + compose_args)
         
     merge = defaultdict(list)
         
