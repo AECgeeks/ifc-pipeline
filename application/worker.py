@@ -960,7 +960,7 @@ def process_safety_barriers(element_type, args, context):
     # store json and gltfs
     utils.store_file(context.id, extension="json")
     for fn in glob.glob(os.path.join(context.task_path, "*.glb")):
-        utils.store_file(id, filename=os.path.relpath(fn, context.task_path))
+        utils.store_file(context.id, filename=os.path.relpath(fn, context.task_path))
 
     
 class voxel_execution_context:
