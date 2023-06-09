@@ -2427,6 +2427,8 @@ def process_entrance():
         
         if not flow_mi_ma.size:
             continue
+            
+        DOOR_EXTRA_MARGIN = 0.1
         
         for ob in objects_on_storey:
 
@@ -2441,7 +2443,7 @@ def process_entrance():
                 
             plt.arrow(ob.center[0], ob.center[1], fdir[0] * 2., fdir[1] * 2., color='gray')
             
-            dims = numpy.array([width, depth, (ob.bounds[1][2] - ob.bounds[0][2]) - 0.1, 0])
+            dims = numpy.array([width, depth - DOOR_EXTRA_MARGIN, (ob.bounds[1][2] - ob.bounds[0][2]) - DOOR_EXTRA_MARGIN * 2., 0])
             # don't move Y inwards
             dims2 = dims.copy()
             dims2[1] = 0
@@ -2450,10 +2452,10 @@ def process_entrance():
             # Y outwards
             if fdir @ ob.M.T[1][0:3] > 0.:
                 c[1] = ob.bounds[1][1]
-                c[1] += 0.1
+                c[1] += 0.1 + DOOR_EXTRA_MARGIN
             else:
                 c[1] = ob.bounds[0][1]
-                c[1] -= 0.1
+                c[1] -= 0.1 + DOOR_EXTRA_MARGIN
                 # in this case local X is reversed
                 dims2[0] *= -1.                
             
