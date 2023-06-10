@@ -712,7 +712,11 @@ def process_3_26(entity, args, context):
     def simplify():
         for fn in glob.glob(os.path.join(d, "*.obj")):
             fn2 = fn[:-4] + "_s.obj"
-            run(sys.executable, "simplify_obj.py", fn, fn2)
+            try:
+                run(sys.executable, "simplify_obj.py", fn, fn2)
+            except subprocess.CalledProcessError as e:
+                print("Failed to simplify obj")
+                shutil.copy(fn, fn2)
             
             with open(fn2, 'r+') as f:
                 ls = f.readlines()
@@ -942,12 +946,19 @@ mesh(result, "result.obj")
 def process_safety_barriers(element_type, args, context):
     context.get_file('result.obj', target=os.path.join(context.task_path, 'result.obj'))
 
-    run(
-        sys.executable,
-        "simplify_obj.py",
-        os.path.join(context.task_path, 'result.obj'),
-        os.path.join(context.task_path, 'simplified.obj')
-    )
+    try:
+        run(
+            sys.executable,
+            "simplify_obj.py",
+            os.path.join(context.task_path, 'result.obj'),
+            os.path.join(context.task_path, 'simplified.obj')
+        )
+    except subprocess.CalledProcessError as e:
+        print("Failed to simplify obj")
+        shutil.copy(
+            os.path.join(context.task_path, 'result.obj'),
+            os.path.join(context.task_path, 'simplified.obj')
+        )
     
     run(
         sys.executable,
