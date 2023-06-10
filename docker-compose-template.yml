@@ -48,7 +48,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    image: aecgeeks/ifc-pipeline:release-0.5.2
+    image: aecgeeks/ifc-pipeline:release-0.5.3
     entrypoint:
       - /bin/sh
       - -c
@@ -121,7 +121,7 @@ services:
     build:
       context: '.'
       dockerfile: application/Dockerfile
-    image: aecgeeks/ifc-pipeline:release-0.5.2
+    image: aecgeeks/ifc-pipeline:release-0.5.3
     entrypoint:
       - supervisord
       - -n
